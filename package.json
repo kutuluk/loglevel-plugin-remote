@@ -1,0 +1,48 @@
+{
+  "name": "loglevel-remote",
+  "description": "Plugin for sending loglevel messages to a remote server",
+  "author": {
+    "name": "kutuluk"
+  },
+  "keywords": [
+    "loglevel",
+    "loglevel-plugin"
+  ],
+  "homepage": "https://github.com/kutuluk/loglevel-remote",
+  "bugs": {
+    "url": "https://github.com/kutuluk/loglevel-remote/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:kutuluk/loglevel-remote.git"
+  },
+  "license": "MIT",
+  "version": "0.1.0",
+  "main": "./dist/loglevel-remote",
+  "babel": {
+    "presets": [
+      "env"
+    ],
+    "plugins": [
+      "add-module-exports",
+      "transform-es2015-modules-umd"
+    ]
+  },
+  "scripts": {
+    "eslint": "eslint src/remote.js",
+    "babel": "babel ./src/remote.js --out-file ./dist/loglevel-remote.js",
+    "uglifyjs": "uglifyjs ./dist/loglevel-remote.js -o ./dist/loglevel-remote.min.js -c -m reserved=[remote]",
+    "build": "npm run babel && npm run uglifyjs",
+    "publish-to-npm": "npm install && npm build && npm publish"
+  },
+  "devDependencies": {
+    "babel-cli": "^6.24.1",
+    "babel-plugin-add-module-exports": "^0.2.1",
+    "babel-plugin-transform-es2015-modules-umd": "^6.24.1",
+    "babel-preset-env": "^1.5.1",
+    "eslint": "^3.19.0",
+    "eslint-config-airbnb-base": "^11.2.0",
+    "eslint-plugin-import": "^2.3.0",
+    "uglify-js": "^3.0.11"
+  }
+}
