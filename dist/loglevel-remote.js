@@ -16,89 +16,94 @@
   Object.defineProperty(exports, "__esModule", {
     value: true
   });
-
-  var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol" ? function (obj) {
-    return typeof obj;
-  } : function (obj) {
-    return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj;
-  };
-
-  var isAssigned = false;
   var CIRCULAR_ERROR_MESSAGE = void 0;
 
   // https://github.com/nodejs/node/blob/master/lib/util.js
   function tryStringify(arg) {
     try {
       return JSON.stringify(arg);
-    } catch (err) {
+    } catch (error) {
       // Populate the circular error message lazily
       if (!CIRCULAR_ERROR_MESSAGE) {
         try {
           var a = {};
           a.a = a;
           JSON.stringify(a);
-        } catch (e) {
-          CIRCULAR_ERROR_MESSAGE = e.message;
+        } catch (circular) {
+          CIRCULAR_ERROR_MESSAGE = circular.message;
         }
       }
-      if (err.name === 'TypeError' && err.message === CIRCULAR_ERROR_MESSAGE) return '[Circular]';
-      throw err;
+      if (error.name === 'TypeError' && error.message === CIRCULAR_ERROR_MESSAGE) {
+        return '[Circular]';
+      }
+      throw error;
     }
   }
 
-  function getClass(obj) {
-    return {}.toString.call(obj).slice(8, -1);
+  // https://github.com/nodejs/node/blob/master/lib/internal/util.js
+  function getConstructorName(obj) {
+    if (!Object.getOwnPropertyDescriptor || !Object.getPrototypeOf) {
+      return Object.prototype.toString.call(obj).slice(8, -1);
+    }
+
+    while (obj) {
+      var descriptor = Object.getOwnPropertyDescriptor(obj, 'constructor');
+      if (descriptor !== undefined && typeof descriptor.value === 'function' && descriptor.value.name !== '') {
+        return descriptor.value.name;
+      }
+
+      obj = Object.getPrototypeOf(obj);
+    }
+
+    return '';
   }
 
-  var format = function format(argss) {
-    var args = [].concat(argss);
+  var format = function format(array) {
     var result = '';
+    var index = 0;
 
-    if (args.length > 1 && typeof args[0] === 'string') {
-      var template = args.shift();
-      result = template.replace(/(%?)(%([sdo]))/g, function (match, escaped, ptn, flag) {
+    if (array.length > 1 && typeof array[0] === 'string') {
+      result = array[0].replace(/(%?)(%([sdjo]))/g, function (match, escaped, ptn, flag) {
         if (!escaped) {
-          var arg = args.shift();
+          index += 1;
+          var arg = array[index];
           var a = '';
           switch (flag) {
-            case ('s', 'd'):
-              a = '' + arg;
+            case 's':
+              a += arg;
               break;
-            case 'o':
+            case 'd':
+              a += +arg;
+              break;
+            case 'j':
               a = tryStringify(arg);
               break;
+            case 'o':
+              {
+                var json = tryStringify(arg);
+                if (json[0] !== '{' && json[0] !== '[') {
+                  json = '<' + json + '>';
+                }
+                a = getConstructorName(arg) + json;
+                break;
+              }
           }
           return a;
         }
         return match;
       });
+
+      // update escaped %% values
+      result = result.replace(/%{2,2}/g, '%');
+
+      index += 1;
     }
 
-    // arguments remain after formatting
-    /*
-    if (args.length) {
-      result += ` ${args.join(' ')}`;
+    // arguments remaining after formatting
+    if (array.length > index) {
+      if (result) result += ' ';
+      result += array.slice(index).join(' ');
     }
-    */
-
-    args.forEach(function (arg) {
-      if (result.length) result += ' ';
-      switch (typeof arg === 'undefined' ? 'undefined' : _typeof(arg)) {
-        case 'object':
-          {
-            result += getClass(arg);
-            result += tryStringify(arg);
-            break;
-          }
-
-        default:
-          result += arg;
-          break;
-      }
-    });
-
-    // update escaped %% values
-    result = result.replace(/%{2,2}/g, '%');
 
     return result;
   };
@@ -106,12 +111,15 @@
   var stackTrace = function stackTrace() {
     try {
       throw new Error('');
-    } catch (e) {
-      return e.stack;
+    } catch (test) {
+      return test.stack;
     }
   };
 
   var hasStack = !!stackTrace();
+  var queue = [];
+  var isAssigned = false;
+  var isSending = false;
 
   var remote = function remote(logger, options) {
     if (!logger || !logger.getLogger) {
@@ -122,23 +130,22 @@
       throw new TypeError('You can assign a plugin only one time');
     }
 
+    if (!XMLHttpRequest) return logger;
+
     isAssigned = true;
 
     options = options || {};
-    options.url = options.url || window.location.origin + '/logger';
+    options.url = options.url || window.location.origin ? window.location.origin + '/logger' : document.location.origin + '/logger';
     options.call = options.call || true;
     options.timeout = options.timeout || 5000;
-    options.clear = options.clear || 1;
     options.trace = options.trace || ['trace', 'warn', 'error'];
+    options.clear = options.clear || 1;
 
     var trace = {};
     for (var i = 0; i < options.trace.length; i += 1) {
       var key = options.trace[i];
       trace[key] = true;
     }
-
-    var queue = [];
-    var isSending = false;
 
     var send = function send() {
       if (!queue.length || isSending) {
@@ -167,17 +174,20 @@
         setTimeout(send, 0);
       };
 
-      if (!msg.trace) {
-        xhr.send(format(msg.message));
-        return;
+      if (!msg.content) {
+        var traceStr = '';
+
+        if (msg.trace) {
+          var lines = msg.trace.split('\n');
+          lines.splice(0, options.clear + 2);
+          traceStr = '\n' + lines.join('\n');
+        }
+
+        msg.content = '' + format(msg.array) + traceStr;
+        msg.array = [];
       }
 
-      var lines = msg.trace.split('\n');
-      lines.splice(0, options.clear + 2);
-      msg.message.push('\n' + lines.join('\n'));
-
-      xhr.send(format(msg.message));
-      msg.message.pop();
+      xhr.send(msg.content);
     };
 
     var originalFactory = logger.methodFactory;
@@ -191,7 +201,7 @@
 
         var stack = hasStack && methodName in trace ? stackTrace() : undefined;
 
-        queue.push({ level: methodName, message: args, trace: stack });
+        queue.push({ array: args, trace: stack });
         send();
 
         if (options.call) rawMethod.apply(undefined, args);
