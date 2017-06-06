@@ -1,5 +1,5 @@
 # loglevel-plugin-remote
-Plugin for sending [loglevel](https://github.com/pimterry/loglevel) messages to a remote server
+Plugin for sending [loglevel](https://github.com/pimterry/loglevel) messages to a remote log server
 
 # Features
 - Sends asynchronously and does not slow down the application
@@ -43,7 +43,7 @@ var defaults = {
 
 ### Browser directly
 
-Download [production version](https://raw.githubusercontent.com/kutuluk/loglevel-remote/master/dist/loglevel-remote.min.js)
+Download [production version](https://raw.githubusercontent.com/kutuluk/loglevel-plugin-remote/master/dist/loglevel-plugin-remote.min.js)
 and copy to your project folder
 ```html
 <script src="loglevel.min.js"></script>
@@ -69,11 +69,8 @@ log.warn('message');
 ```javascript
 var log = require('loglevel');
 var remote = require('loglevel-plugin-remote');
+
 remote.apply(log);
-
-// or
-// var log = require('loglevel-plugin-remote').apply(require('loglevel'));
-
 log.warn('message');
 ```
 
@@ -96,7 +93,7 @@ log.setLevel('trace');
 
 remote.apply(log);
 
-log.info('log levels:');
+log.info('Log levels:');
 log.trace('trace');
 log.debug('debug');
 log.info('info');
@@ -106,7 +103,7 @@ log.error('error');
 
 Output in a log server
 ```
-log levels:
+Log levels:
 trace message
     at http://localhost/js/test.js:35:5
 debug message
@@ -119,21 +116,19 @@ error message
 
 Code
 ```javascript
-log.info('string substitutions:');
-log.info('%% %t %s', 'one', 'two');
-log.info('number substitutions %d %d %d %d', 16, 1e6, '16', '1e6');
+log.info('String substitutions: %% %t %s', 'one', 'two');
+log.info('Number substitutions: %d %d %d %d', 16, 1e6, '16', '1e6');
 ```
 
 Output in a log server
 ```
-string substitutions:
-% %t one two
-number substitutions 16 1000000 16 1000000
+String substitutions: % %t one two
+Number substitutions: 16 1000000 16 1000000
 ```
 
 Code
 ```javascript
-log.info('object printing:');
+log.info('Object substitutions:');
 
 function Rectangle(width, height) {
   this.width = width;
@@ -163,7 +158,7 @@ log.info('array: %o', array);
 
 Output in a log server
 ```
-object printing:
+Object substitutions:
 [object Object], NaN, Rectangle{"height":10,"width":10}, {"height":10,"width":10} [object Object]
 date: Date<"2017-06-04T13:16:01.455Z">
 error: Error{}

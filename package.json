@@ -1,6 +1,6 @@
 {
   "name": "loglevel-plugin-remote",
-  "description": "Plugin for sending loglevel messages to a remote server",
+  "description": "Plugin for sending loglevel messages to a remote log server",
   "author": {
     "name": "kutuluk"
   },
