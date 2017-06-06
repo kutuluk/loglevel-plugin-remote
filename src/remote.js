@@ -117,10 +117,16 @@ const queue = [];
 let isAssigned = false;
 let isSending = false;
 
+let origin = '';
+if (window && window.location) {
+  origin = window.location.origin || '';
+}
+if (!origin && document && document.location) {
+  origin = document.location.origin || '';
+}
+
 const defaults = {
-  url: window.location.origin
-    ? `${window.location.origin}/logger`
-    : `${document.location.origin}/logger`,
+  url: `${origin}/logger`,
   call: true,
   timeout: 0,
   trace: ['trace', 'warn', 'error'],
@@ -136,7 +142,7 @@ const apply = function apply(logger, options) {
     throw new TypeError('You can assign a plugin only one time');
   }
 
-  if (!XMLHttpRequest) return logger;
+  if (!window || !window.XMLHttpRequest) return logger;
 
   isAssigned = true;
 

@@ -50,14 +50,14 @@ and copy to your project folder
 <script src="loglevel-plugin-remote.min.js"></script>
 
 <script>
-  remote.noConflict().apply(log);
-  log.warn('message');
+  var logger = log.noConflict();
+  remote.noConflict().apply(logger);
+  logger.warn('message');
 </script>
 ```
 
 ### ES6
 ```javascript
-
 import log from 'loglevel';
 import remote from 'loglevel-plugin-remote';
 
@@ -176,16 +176,17 @@ var log = require('loglevel');
 var remote = require('loglevel-plugin-remote');
 var prefix = require('loglevel-plugin-prefix');
 
-log.setLevel('trace');
-
-remote.apply(log);
+// To clean the loglevel-plugin-prefix line in the stack-trace:
+// options = { clear: 2 }
+remote.apply(log, { clear: 2 });
 prefix.apply(log);
 
 var array = [1, 2, 3];
-log.info('array: %o', array);
+log.warn('array: %o', array);
 ```
 
 Output in a log server
 ```
-[12:53:46] INFO: array: Array[1,2,3]
+[12:53:46] WARN: array: Array[1,2,3]
+    at http://localhost/js/test.js:9:5
 ```
