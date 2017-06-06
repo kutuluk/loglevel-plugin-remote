@@ -94,11 +94,11 @@ log.setLevel('trace');
 remote.apply(log);
 
 log.info('Log levels:');
-log.trace('trace');
-log.debug('debug');
-log.info('info');
-log.warn('warn');
-log.error('error');
+log.trace('trace message');
+log.debug('debug message');
+log.info('info message');
+log.warn('warn message');
+log.error('error message');
 ```
 
 Output in a log server
