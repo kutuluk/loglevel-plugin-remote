@@ -105,13 +105,13 @@ Output in a log server
 ```
 Log levels:
 trace message
-    at http://localhost/js/test.js:35:5
+    at http://localhost/js/test.js:9:5
 debug message
 info message
 warn message
-    at http://localhost/js/test.js:38:5
+    at http://localhost/js/test.js:12:5
 error message
-    at http://localhost/js/test.js:39:5
+    at http://localhost/js/test.js:13:5
 ```
 
 Code
@@ -188,5 +188,5 @@ log.warn('array: %o', array);
 Output in a log server
 ```
 [12:53:46] WARN: array: Array[1,2,3]
-    at http://localhost/js/test.js:9:5
+    at http://localhost/js/test.js:11:5
 ```

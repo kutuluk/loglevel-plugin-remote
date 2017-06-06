@@ -145,6 +145,7 @@ const apply = function apply(logger, options) {
   if (!window || !window.XMLHttpRequest) return logger;
 
   isAssigned = true;
+  const hasTimeoutSupport = 'ontimeout' in new window.XMLHttpRequest();
 
   options = merge({}, defaults, options);
 
@@ -170,13 +171,21 @@ const apply = function apply(logger, options) {
     }
 
     isSending = true;
+    const msg = queue.shift();
+    let timeout;
 
-    const xhr = new XMLHttpRequest();
+    const xhr = new window.XMLHttpRequest();
     xhr.open('POST', `${options.url}?r=${Math.random()}`, true);
-    xhr.timeout = options.timeout;
     xhr.setRequestHeader('Content-Type', 'text/plain');
 
-    const msg = queue.shift();
+    const cancel = () => {
+      // if (xhr.readyState !== 4) {
+      xhr.abort();
+      queue.unshift(msg);
+      isSending = false;
+      setTimeout(send, 0);
+      // }
+    };
 
     xhr.onreadystatechange = () => {
       if (xhr.readyState !== 4) {
@@ -188,10 +197,20 @@ const apply = function apply(logger, options) {
       }
 
       isSending = false;
+      if (timeout) clearTimeout(timeout);
       setTimeout(send, 0);
     };
 
+    if (hasTimeoutSupport) {
+      xhr.timeout = options.timeout;
+      xhr.ontimeout = cancel;
+    }
+
     xhr.send(msg);
+
+    if (!hasTimeoutSupport && options.timeout) {
+      timeout = setTimeout(cancel, options.timeout);
+    }
   };
 
   const originalFactory = logger.methodFactory;
@@ -216,10 +235,10 @@ const remote = {};
 remote.apply = apply;
 remote.name = 'loglevel-plugin-remote';
 
-const saveRemote = window ? window.remote : undefined;
+const save = window ? window.remote : undefined;
 remote.noConflict = () => {
   if (window && window.remote === remote) {
-    window.remote = saveRemote;
+    window.remote = save;
   }
   return remote;
 };
