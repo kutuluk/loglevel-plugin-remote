@@ -9,6 +9,8 @@
     },
     "rules": {
         "no-param-reassign": "off",
-        "default-case": "off"
+        "default-case": "off",
+        "prefer-rest-params": "off",
+        "no-restricted-syntax": "off"
     }
 }

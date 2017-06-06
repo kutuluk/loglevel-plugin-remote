@@ -22,12 +22,12 @@ function tryStringify(arg) {
   }
 }
 
-// https://github.com/nodejs/node/blob/master/lib/internal/util.js
 function getConstructorName(obj) {
   if (!Object.getOwnPropertyDescriptor || !Object.getPrototypeOf) {
     return Object.prototype.toString.call(obj).slice(8, -1);
   }
 
+  // https://github.com/nodejs/node/blob/master/lib/internal/util.js
   while (obj) {
     const descriptor = Object.getOwnPropertyDescriptor(obj, 'constructor');
     if (
@@ -93,6 +93,17 @@ const format = function format(array) {
   return result;
 };
 
+const merge = function merge(target) {
+  for (let i = 1; i < arguments.length; i += 1) {
+    for (const prop in arguments[i]) {
+      if (Object.prototype.hasOwnProperty.call(arguments[i], prop)) {
+        target[prop] = arguments[i][prop];
+      }
+    }
+  }
+  return target;
+};
+
 const stackTrace = () => {
   try {
     throw new Error('');
@@ -106,7 +117,17 @@ const queue = [];
 let isAssigned = false;
 let isSending = false;
 
-const remote = function remote(logger, options) {
+const defaults = {
+  url: window.location.origin
+    ? `${window.location.origin}/logger`
+    : `${document.location.origin}/logger`,
+  call: true,
+  timeout: 0,
+  trace: ['trace', 'warn', 'error'],
+  clear: 1,
+};
+
+const apply = function apply(logger, options) {
   if (!logger || !logger.getLogger) {
     throw new TypeError('Argument is not a root loglevel object');
   }
@@ -119,20 +140,23 @@ const remote = function remote(logger, options) {
 
   isAssigned = true;
 
-  options = options || {};
-  options.url = options.url || window.location.origin
-    ? `${window.location.origin}/logger`
-    : `${document.location.origin}/logger`;
-  options.call = options.call || true;
-  options.timeout = options.timeout || 5000;
-  options.trace = options.trace || ['trace', 'warn', 'error'];
-  options.clear = options.clear || 1;
+  options = merge({}, defaults, options);
 
   const trace = {};
   for (let i = 0; i < options.trace.length; i += 1) {
     const key = options.trace[i];
     trace[key] = true;
   }
+
+  const push = (array, stack) => {
+    if (stack) {
+      const lines = stack.split('\n');
+      lines.splice(0, options.clear + 2);
+      stack = `\n${lines.join('\n')}`;
+    }
+
+    queue.push(`${format(array)}${stack}`);
+  };
 
   const send = () => {
     if (!queue.length || isSending) {
@@ -141,12 +165,12 @@ const remote = function remote(logger, options) {
 
     isSending = true;
 
-    const msg = queue.shift();
-
     const xhr = new XMLHttpRequest();
     xhr.open('POST', `${options.url}?r=${Math.random()}`, true);
     xhr.timeout = options.timeout;
     xhr.setRequestHeader('Content-Type', 'text/plain');
+
+    const msg = queue.shift();
 
     xhr.onreadystatechange = () => {
       if (xhr.readyState !== 4) {
@@ -161,20 +185,7 @@ const remote = function remote(logger, options) {
       setTimeout(send, 0);
     };
 
-    if (!msg.content) {
-      let traceStr = '';
-
-      if (msg.trace) {
-        const lines = msg.trace.split('\n');
-        lines.splice(0, options.clear + 2);
-        traceStr = `\n${lines.join('\n')}`;
-      }
-
-      msg.content = `${format(msg.array)}${traceStr}`;
-      msg.array = [];
-    }
-
-    xhr.send(msg.content);
+    xhr.send(msg);
   };
 
   const originalFactory = logger.methodFactory;
@@ -182,9 +193,9 @@ const remote = function remote(logger, options) {
     const rawMethod = originalFactory(methodName, logLevel, loggerName);
 
     return (...args) => {
-      const stack = hasStack && methodName in trace ? stackTrace() : undefined;
+      const stack = hasStack && methodName in trace ? stackTrace() : '';
 
-      queue.push({ array: args, trace: stack });
+      push(args, stack);
       send();
 
       if (options.call) rawMethod(...args);
@@ -193,6 +204,18 @@ const remote = function remote(logger, options) {
 
   logger.setLevel(logger.getLevel());
   return logger;
+};
+
+const remote = {};
+remote.apply = apply;
+remote.name = 'loglevel-plugin-remote';
+
+const saveRemote = window ? window.remote : undefined;
+remote.noConflict = () => {
+  if (window && window.remote === remote) {
+    window.remote = saveRemote;
+  }
+  return remote;
 };
 
 export default remote;

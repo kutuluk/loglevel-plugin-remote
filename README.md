@@ -1,4 +1,4 @@
-# loglevel-remote
+# loglevel-plugin-remote
 Plugin for sending [loglevel](https://github.com/pimterry/loglevel) messages to a remote server
 
 # Features
@@ -10,13 +10,13 @@ Plugin for sending [loglevel](https://github.com/pimterry/loglevel) messages to 
 ## Installation
 
 ```sh
-npm install loglevel-remote --save
+npm install loglevel-plugin-remote --save
 ```
 
 ## API
 
 ```javascript
-remote(log[, options]);
+apply(log[, options]);
 ```
 
 **log** - root logger, imported from loglevel package
@@ -24,12 +24,10 @@ remote(log[, options]);
 **options** - configuration object
 
 ```javascript
-default_options = {
-  url: window.location.origin
-    ? window.location.origin + '/logger'
-    : document.location.origin + '/logger',
+var defaults = {
+  url: window.location.origin + '/logger',
   call: true,
-  timeout: 5000,
+  timeout: 0,
   trace: ['trace', 'warn', 'error'],
   clear: 1
 }
@@ -37,7 +35,7 @@ default_options = {
 
 - **url** - URL of log server API
 - **call** - if set to true, then the original loglevel method will be called
-- **timeout** - number of milliseconds a request can take before automatically being terminated [MDN](https://developer.mozilla.org/docs/Web/API/XMLHttpRequest/timeout)
+- **timeout** - timeout in milliseconds ([MDN](https://developer.mozilla.org/docs/Web/API/XMLHttpRequest/timeout))
 - **trace** - lots of levels for which to add the stack trace
 - **clear** - the number of rows to clean stack trace
 
@@ -49,10 +47,10 @@ Download [production version](https://raw.githubusercontent.com/kutuluk/loglevel
 and copy to your project folder
 ```html
 <script src="loglevel.min.js"></script>
-<script src="loglevel-remote.min.js"></script>
+<script src="loglevel-plugin-remote.min.js"></script>
 
 <script>
-  remote(log);
+  remote.noConflict().apply(log);
   log.warn('message');
 </script>
 ```
@@ -61,50 +59,88 @@ and copy to your project folder
 ```javascript
 
 import log from 'loglevel';
-import remote from 'loglevel-remote';
+import remote from 'loglevel-plugin-remote';
 
-remote(log);
+remote.apply(log);
 log.warn('message');
 ```
 
 ### CommonJS
 ```javascript
 var log = require('loglevel');
-var remote = require('loglevel-remote');
-remote(log);
+var remote = require('loglevel-plugin-remote');
+remote.apply(log);
 
 // or
-// var log = require('loglevel-remote')(require('loglevel'));
+// var log = require('loglevel-plugin-remote').apply(require('loglevel'));
 
 log.warn('message');
 ```
 
 ### AMD
 ```javascript
-define(['loglevel', 'loglevel-remote'], function(log, remote) {
-  remote(log);
+define(['loglevel', 'loglevel-plugin-remote'], function(log, remote) {
+  remote.apply(log);
   log.warn('message');
 });
 ```
 
 ## Example
 
+Code
 ```javascript
 var log = require('loglevel');
-var remote = require('loglevel-remote');
+var remote = require('loglevel-plugin-remote');
 
 log.setLevel('trace');
 
-remote(log);
+remote.apply(log);
 
-log.info();
+log.info('log levels:');
+log.trace('trace');
+log.debug('debug');
+log.info('info');
+log.warn('warn');
+log.error('error');
+```
+
+Output in a log server
+```
+log levels:
+trace message
+    at http://localhost/js/test.js:35:5
+debug message
+info message
+warn message
+    at http://localhost/js/test.js:38:5
+error message
+    at http://localhost/js/test.js:39:5
+```
+
+Code
+```javascript
+log.info('string substitutions:');
+log.info('%% %t %s', 'one', 'two');
+log.info('number substitutions %d %d %d %d', 16, 1e6, '16', '1e6');
+```
+
+Output in a log server
+```
+string substitutions:
+% %t one two
+number substitutions 16 1000000 16 1000000
+```
+
+Code
+```javascript
+log.info('object printing:');
 
 function Rectangle(width, height) {
-  this.height = height;
   this.width = width;
+  this.height = height;
 }
 var object = new Rectangle(10, 10);
-log.info('object: %o', object);
+log.info('%s, %d, %o, %j', object, object, object, object, object);
 
 var date = new Date();
 log.info('date: %o', date);
@@ -123,36 +159,38 @@ log.info('boolean: %o', bool);
 
 var array = [1, 2, 3];
 log.info('array: %o', array);
-
-log.trace('trace message');
-log.debug('debug message');
-log.info('info message');
-log.warn('warn message');
-log.error('error message');
-
-log.info('%% %t %s', 'one', 'two');
-log.info('number substitutions %d %d %d %d', 16, 1e6, '16', '1e6');
-log.info('%s, %d, %o, %j', object, object, object, object, object);
 ```
 
-Output
+Output in a log server
 ```
-object: Rectangle{"height":10,"width":10}
+object printing:
+[object Object], NaN, Rectangle{"height":10,"width":10}, {"height":10,"width":10} [object Object]
 date: Date<"2017-06-04T13:16:01.455Z">
 error: Error{}
 string: String<"My string">
 number: Number<123>
 boolean: Boolean<true>
 array: Array[1,2,3]
-trace message
-    at http://localhost:8080/js/test.js:35:5
-debug message
-info message
-warn message
-    at http://localhost:8080/js/test.js:38:5
-error message
-    at http://localhost:8080/js/test.js:39:5
-% %t one two
-number substitutions 16 1000000 16 1000000
-[object Object], NaN, Rectangle{"height":10,"width":10}, {"height":10,"width":10} [object Object]
+```
+
+## Multiple plugins
+
+Code
+```javascript
+var log = require('loglevel');
+var remote = require('loglevel-plugin-remote');
+var prefix = require('loglevel-plugin-prefix');
+
+log.setLevel('trace');
+
+remote.apply(log);
+prefix.apply(log);
+
+var array = [1, 2, 3];
+log.info('array: %o', array);
+```
+
+Output in a log server
+```
+[12:53:46] INFO: array: Array[1,2,3]
 ```
