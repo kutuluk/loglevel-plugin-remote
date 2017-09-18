@@ -178,6 +178,10 @@ const apply = function apply(logger, options) {
     xhr.open('POST', `${options.url}?r=${Math.random()}`, true);
     xhr.setRequestHeader('Content-Type', 'text/plain');
 
+    if (options.authorization) {
+      xhr.setRequestHeader('Authorization', options.authorization);
+    }
+
     const cancel = () => {
       // if (xhr.readyState !== 4) {
       xhr.abort();

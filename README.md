@@ -29,7 +29,8 @@ var defaults = {
   call: true,
   timeout: 0,
   trace: ['trace', 'warn', 'error'],
-  clear: 1
+  clear: 1,
+  authorization: undefined
 }
 ```
 
@@ -38,6 +39,7 @@ var defaults = {
 - **timeout** - timeout in milliseconds ([MDN](https://developer.mozilla.org/docs/Web/API/XMLHttpRequest/timeout))
 - **trace** - lots of levels for which to add the stack trace
 - **clear** - the number of rows to clean stack trace
+- **authorization** - Set it, if your server needs an authorization token (EG: Bearer e8da0826-d680-4f79-87a9-d39fb06647b3)
 
 ## Base usage
 
