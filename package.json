@@ -21,7 +21,7 @@
     "url": "git@github.com:kutuluk/loglevel-plugin-remote.git"
   },
   "license": "MIT",
-  "version": "0.1.1",
+  "version": "0.1.3",
   "main": "./lib/loglevel-plugin-remote",
   "babel": {
     "presets": [
@@ -37,7 +37,7 @@
     "babel": "babel ./src/remote.js --out-file ./lib/loglevel-plugin-remote.js",
     "uglifyjs": "uglifyjs ./lib/loglevel-plugin-remote.js -o ./dist/loglevel-plugin-remote.min.js -c -m reserved=[remote]",
     "build": "npm run babel && npm run uglifyjs",
-    "publish-to-npm": "npm install && npm build && npm publish"
+    "publish-to-npm": "npm install && npm run build && npm publish"
   },
   "devDependencies": {
     "babel-cli": "^6.24.1",

@@ -131,6 +131,7 @@ const defaults = {
   timeout: 0,
   trace: ['trace', 'warn', 'error'],
   clear: 1,
+  token: '',
 };
 
 const apply = function apply(logger, options) {
@@ -178,8 +179,8 @@ const apply = function apply(logger, options) {
     xhr.open('POST', `${options.url}?r=${Math.random()}`, true);
     xhr.setRequestHeader('Content-Type', 'text/plain');
 
-    if (options.authorization) {
-      xhr.setRequestHeader('Authorization', options.authorization);
+    if (options.token) {
+      xhr.setRequestHeader('Authorization', options.token);
     }
 
     const cancel = () => {
