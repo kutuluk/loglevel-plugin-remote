@@ -176,7 +176,7 @@ const apply = function apply(logger, options) {
     let timeout;
 
     const xhr = new window.XMLHttpRequest();
-    xhr.open('POST', `${options.url}?r=${Math.random()}`, true);
+    xhr.open('POST', options.url, true);
     xhr.setRequestHeader('Content-Type', 'text/plain');
 
     if (options.token) {

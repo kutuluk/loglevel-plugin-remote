@@ -21,7 +21,7 @@
     "url": "git@github.com:kutuluk/loglevel-plugin-remote.git"
   },
   "license": "MIT",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "main": "./lib/loglevel-plugin-remote",
   "babel": {
     "presets": [
