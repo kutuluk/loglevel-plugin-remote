@@ -180,7 +180,7 @@ const apply = function apply(logger, options) {
     xhr.setRequestHeader('Content-Type', 'text/plain');
 
     if (options.token) {
-      xhr.setRequestHeader('Authorization', options.token);
+      xhr.setRequestHeader('Authorization', `Bearer ${options.token}`);
     }
 
     const cancel = () => {

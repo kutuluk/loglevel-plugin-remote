@@ -39,7 +39,7 @@ var defaults = {
 - **timeout** - timeout in milliseconds ([MDN](https://developer.mozilla.org/docs/Web/API/XMLHttpRequest/timeout))
 - **trace** - lots of levels for which to add the stack trace
 - **clear** - the number of rows to clean stack trace
-- **token** - authorization token (EG: "Bearer e8da0826-d680-4f79-87a9-d39fb06647b3")
+- **token** - authorization token for Bearer header (EG: "e8da0826-d680-4f79-87a9-d39fb06647b3")
 
 ## Base usage
 
