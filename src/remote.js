@@ -127,11 +127,10 @@ if (!origin && document && document.location) {
 
 const defaults = {
   url: `${origin}/logger`,
-  call: true,
+  token: '',
   timeout: 0,
   trace: ['trace', 'warn', 'error'],
-  clear: 1,
-  token: '',
+  depth: 0,
 };
 
 const apply = function apply(logger, options) {
@@ -159,7 +158,7 @@ const apply = function apply(logger, options) {
   const push = (array, stack) => {
     if (stack) {
       const lines = stack.split('\n');
-      lines.splice(0, options.clear + 2);
+      lines.splice(0, options.depth + 3);
       stack = `\n${lines.join('\n')}`;
     }
 
@@ -228,7 +227,7 @@ const apply = function apply(logger, options) {
       push(args, stack);
       send();
 
-      if (options.call) rawMethod(...args);
+      rawMethod(...args);
     };
   };
 
