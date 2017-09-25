@@ -33,9 +33,9 @@ var defaults = {
 }
 ```
 
-- **url** - URL of log server API
-- **token** - authorization token for Bearer header (EG: "e8da0826-d680-4f79-87a9-d39fb06647b3")
-- **timeout** - timeout in milliseconds ([MDN](https://developer.mozilla.org/docs/Web/API/XMLHttpRequest/timeout))
+- **url** - log server URL
+- **token** - token for Bearer authentication scheme (e.g. UUID: "9fda563b-7103-4f3c-ad93-4fe0085ce75c") (see [RFC 6750](https://tools.ietf.org/html/rfc6750))
+- **timeout** - timeout in milliseconds (see [MDN](https://developer.mozilla.org/docs/Web/API/XMLHttpRequest/timeout))
 - **trace** - lots of levels for which to add the stack trace
 - **depth** - number of following plugins (affects the number of rows to clear the stack trace)
 
