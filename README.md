@@ -34,6 +34,12 @@ var defaults = {
   timestampFormatter: function () {
     return new Date().toString();
   },
+  maxQueueSize: 500,
+  backoffStrategy: function (interval) {
+    let doubleIt = interval  * 2
+    return doubleIt > 30000 ? 30000 : doubleIt
+  },
+  onMessageDropped: (msg) => {},
 }
 ```
 
@@ -44,6 +50,9 @@ var defaults = {
 - **depth** - number of following plugins (affects the number of rows to clear the stack trace)
 - **format** - format message sent to log server as `text` or `json`
 - **timestampFormatter** - a functions for formatting timestamp used when sending message as `json`
+- **maxQueueSize** - the number of items in queue before we are throwing away the oldest message in queue.
+- **backoffStrategy** - function used to calculate the next send interval.
+- **onMessageDropped** - called when a message is dropped due to max queue size reached.
 
 ## Base usage
 
