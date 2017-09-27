@@ -131,6 +131,8 @@ const defaults = {
   timeout: 0,
   trace: ['trace', 'warn', 'error'],
   depth: 0,
+  format: 'text',
+  timestampFormatter: () => new Date().toString(),
 };
 
 const apply = function apply(logger, options) {
@@ -155,14 +157,22 @@ const apply = function apply(logger, options) {
     trace[key] = true;
   }
 
-  const push = (array, stack) => {
+  const push = (array, stack, logLevelName, logLevel, loggerName) => {
     if (stack) {
       const lines = stack.split('\n');
       lines.splice(0, options.depth + 3);
       stack = `\n${lines.join('\n')}`;
     }
 
-    queue.push(`${format(array)}${stack}`);
+    queue.push({
+      timestamp: options.timestampFormatter(),
+      logLevelName,
+      logLevel,
+      loggerName,
+      message: `${format(array)}`,
+      args: array,
+      stacktrace: stack,
+    });
   };
 
   const send = () => {
@@ -210,7 +220,11 @@ const apply = function apply(logger, options) {
       xhr.ontimeout = cancel;
     }
 
-    xhr.send(msg);
+    if (options.format === 'json') {
+      xhr.send(tryStringify(msg));
+    } else {
+      xhr.send(`${msg.message}${msg.stacktrace}`);
+    }
 
     if (!hasTimeoutSupport && options.timeout) {
       timeout = setTimeout(cancel, options.timeout);
@@ -224,7 +238,7 @@ const apply = function apply(logger, options) {
     return (...args) => {
       const stack = hasStack && methodName in trace ? stackTrace() : '';
 
-      push(args, stack);
+      push(args, stack, methodName, logLevel, loggerName);
       send();
 
       rawMethod(...args);
