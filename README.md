@@ -30,6 +30,10 @@ var defaults = {
   timeout: 0,
   trace: ['trace', 'warn', 'error'],
   depth: 0,
+  format: 'text',
+  timestampFormatter: function () {
+    return new Date().toString();
+  },
 }
 ```
 
@@ -38,6 +42,8 @@ var defaults = {
 - **timeout** - timeout in milliseconds (see [MDN](https://developer.mozilla.org/docs/Web/API/XMLHttpRequest/timeout))
 - **trace** - lots of levels for which to add the stack trace
 - **depth** - number of following plugins (affects the number of rows to clear the stack trace)
+- **format** - format message sent to log server as `text` or `json`
+- **timestampFormatter** - a functions for formatting timestamp used when sending message as `json`
 
 ## Base usage
 
