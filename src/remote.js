@@ -131,6 +131,8 @@ const defaults = {
   timeout: 0,
   trace: ['trace', 'warn', 'error'],
   depth: 0,
+  json: false,
+  timestamp: () => new Date().toISOString(),
 };
 
 const apply = function apply(logger, options) {
@@ -155,15 +157,7 @@ const apply = function apply(logger, options) {
     trace[key] = true;
   }
 
-  const push = (array, stack) => {
-    if (stack) {
-      const lines = stack.split('\n');
-      lines.splice(0, options.depth + 3);
-      stack = `\n${lines.join('\n')}`;
-    }
-
-    queue.push(`${format(array)}${stack}`);
-  };
+  const contentType = options.json ? 'application/json' : 'text/plain';
 
   const send = () => {
     if (!queue.length || isSending) {
@@ -176,7 +170,7 @@ const apply = function apply(logger, options) {
 
     const xhr = new window.XMLHttpRequest();
     xhr.open('POST', options.url, true);
-    xhr.setRequestHeader('Content-Type', 'text/plain');
+    xhr.setRequestHeader('Content-Type', contentType);
 
     if (options.token) {
       xhr.setRequestHeader('Authorization', `Bearer ${options.token}`);
@@ -210,7 +204,11 @@ const apply = function apply(logger, options) {
       xhr.ontimeout = cancel;
     }
 
-    xhr.send(msg);
+    if (options.json) {
+      xhr.send(tryStringify(msg));
+    } else {
+      xhr.send(`${msg.message}${msg.stacktrace}`);
+    }
 
     if (!hasTimeoutSupport && options.timeout) {
       timeout = setTimeout(cancel, options.timeout);
@@ -222,9 +220,35 @@ const apply = function apply(logger, options) {
     const rawMethod = originalFactory(methodName, logLevel, loggerName);
 
     return (...args) => {
-      const stack = hasStack && methodName in trace ? stackTrace() : '';
+      let timestamp;
 
-      push(args, stack);
+      if (options.json) {
+        timestamp = options.timestamp();
+      }
+
+      let stack = hasStack && methodName in trace ? stackTrace() : '';
+
+      if (stack) {
+        const lines = stack.split('\n');
+        lines.splice(0, options.depth + 3);
+        stack = lines.join('\n');
+      }
+
+      if (options.json) {
+        queue.push({
+          message: format(args),
+          stacktrace: stack,
+          timestamp,
+          level: methodName,
+          logger: loggerName,
+        });
+      } else {
+        queue.push({
+          message: format(args),
+          stacktrace: stack ? `\n${stack}` : '',
+        });
+      }
+
       send();
 
       rawMethod(...args);
