@@ -116,6 +116,7 @@ const hasStack = !!stackTrace();
 const queue = [];
 let isAssigned = false;
 let isSending = false;
+let sendInterval = 1;
 
 let origin = '';
 if (window && window.location) {
@@ -133,6 +134,12 @@ const defaults = {
   depth: 0,
   json: false,
   timestamp: () => new Date().toISOString(),
+  maxQueueSize: 500,
+  backoffStrategy: (interval) => {
+    const doubleIt = interval * 2;
+    return doubleIt > 30000 ? 30000 : doubleIt;
+  },
+  onMessageDropped: () => {},
 };
 
 const apply = function apply(logger, options) {
@@ -181,7 +188,7 @@ const apply = function apply(logger, options) {
       xhr.abort();
       queue.unshift(msg);
       isSending = false;
-      setTimeout(send, 0);
+      setTimeout(send, sendInterval);
       // }
     };
 
@@ -191,12 +198,21 @@ const apply = function apply(logger, options) {
       }
 
       if (xhr.status !== 200) {
-        queue.unshift(msg);
+        const queueMaxSizeReached = queue.length >= options.maxQueueSize;
+        const queueEmptyAndDisabled = options.maxQueueSize === 0 && queue.length === 0;
+        if (!queueMaxSizeReached || queueEmptyAndDisabled) {
+          queue.unshift(msg);
+        } else if (options.onMessageDropped) {
+          options.onMessageDropped(msg);
+        }
+        sendInterval = options.backoffStrategy(sendInterval);
+      } else {
+        sendInterval = 1;
       }
 
       isSending = false;
       if (timeout) clearTimeout(timeout);
-      setTimeout(send, 0);
+      setTimeout(send, sendInterval);
     };
 
     if (hasTimeoutSupport) {
@@ -224,6 +240,13 @@ const apply = function apply(logger, options) {
 
       if (options.json) {
         timestamp = options.timestamp();
+      }
+      
+      if (queue.length !== 0 && queue.length >= options.maxQueueSize) {
+        const droppedMsg = queue.shift();
+        if (options.onMessageDropped) {
+          options.onMessageDropped(droppedMsg);
+        }
       }
 
       let stack = hasStack && methodName in trace ? stackTrace() : '';
