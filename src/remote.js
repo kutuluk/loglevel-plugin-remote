@@ -204,7 +204,7 @@ const apply = function apply(logger, options) {
       xhr.ontimeout = cancel;
     }
 
-    if (options.format === 'json') {
+    if (options.json) {
       xhr.send(tryStringify(msg));
     } else {
       xhr.send(`${msg.message}${msg.stacktrace}`);
