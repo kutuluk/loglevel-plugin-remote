@@ -132,8 +132,8 @@ const defaults = {
   timeout: 0,
   trace: ['trace', 'warn', 'error'],
   depth: 0,
-  format: 'text',
-  timestampFormatter: () => new Date().toString(),
+  json: false,
+  timestamp: () => new Date().toISOString(),
   maxQueueSize: 500,
   backoffStrategy: (interval) => {
     const doubleIt = interval * 2;
@@ -164,23 +164,7 @@ const apply = function apply(logger, options) {
     trace[key] = true;
   }
 
-  const push = (array, stack, logLevelName, logLevel, loggerName) => {
-    if (stack) {
-      const lines = stack.split('\n');
-      lines.splice(0, options.depth + 3);
-      stack = `\n${lines.join('\n')}`;
-    }
-
-    queue.push({
-      timestamp: options.timestampFormatter(),
-      logLevelName,
-      logLevel,
-      loggerName,
-      message: `${format(array)}`,
-      args: array,
-      stacktrace: stack,
-    });
-  };
+  const contentType = options.json ? 'application/json' : 'text/plain';
 
   const send = () => {
     if (!queue.length || isSending) {
@@ -193,7 +177,7 @@ const apply = function apply(logger, options) {
 
     const xhr = new window.XMLHttpRequest();
     xhr.open('POST', options.url, true);
-    xhr.setRequestHeader('Content-Type', 'text/plain');
+    xhr.setRequestHeader('Content-Type', contentType);
 
     if (options.token) {
       xhr.setRequestHeader('Authorization', `Bearer ${options.token}`);
@@ -236,7 +220,7 @@ const apply = function apply(logger, options) {
       xhr.ontimeout = cancel;
     }
 
-    if (options.format === 'json') {
+    if (options.json) {
       xhr.send(tryStringify(msg));
     } else {
       xhr.send(`${msg.message}${msg.stacktrace}`);
@@ -252,8 +236,12 @@ const apply = function apply(logger, options) {
     const rawMethod = originalFactory(methodName, logLevel, loggerName);
 
     return (...args) => {
-      const stack = hasStack && methodName in trace ? stackTrace() : '';
+      let timestamp;
 
+      if (options.json) {
+        timestamp = options.timestamp();
+      }
+      
       if (queue.length !== 0 && queue.length >= options.maxQueueSize) {
         const droppedMsg = queue.shift();
         if (options.onMessageDropped) {
@@ -261,7 +249,29 @@ const apply = function apply(logger, options) {
         }
       }
 
-      push(args, stack, methodName, logLevel, loggerName);
+      let stack = hasStack && methodName in trace ? stackTrace() : '';
+
+      if (stack) {
+        const lines = stack.split('\n');
+        lines.splice(0, options.depth + 3);
+        stack = lines.join('\n');
+      }
+
+      if (options.json) {
+        queue.push({
+          message: format(args),
+          stacktrace: stack,
+          timestamp,
+          level: methodName,
+          logger: loggerName,
+        });
+      } else {
+        queue.push({
+          message: format(args),
+          stacktrace: stack ? `\n${stack}` : '',
+        });
+      }
+
       send();
 
       rawMethod(...args);

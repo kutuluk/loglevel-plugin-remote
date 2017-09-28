@@ -30,16 +30,16 @@ var defaults = {
   timeout: 0,
   trace: ['trace', 'warn', 'error'],
   depth: 0,
-  format: 'text',
-  timestampFormatter: function () {
-    return new Date().toString();
+  json: false,
+  timestamp: function () {
+    return new Date().toISOString();
   },
   maxQueueSize: 500,
   backoffStrategy: function (interval) {
     let doubleIt = interval  * 2
     return doubleIt > 30000 ? 30000 : doubleIt
   },
-  onMessageDropped: (msg) => {},
+  onMessageDropped: (msg) => {}
 }
 ```
 
@@ -48,8 +48,19 @@ var defaults = {
 - **timeout** - timeout in milliseconds (see [MDN](https://developer.mozilla.org/docs/Web/API/XMLHttpRequest/timeout))
 - **trace** - lots of levels for which to add the stack trace
 - **depth** - number of following plugins (affects the number of rows to clear the stack trace)
-- **format** - format message sent to log server as `text` or `json`
-- **timestampFormatter** - a functions for formatting timestamp used when sending message as `json`
+- **json** - when set to true, it sends messages in json format:
+
+```json
+    {
+        "message": "Text of message",
+        "stacktrace": "at http://localhost/js/test.js:11:5",
+        "timestamp": "2017-05-29T12:53:46.000Z", 
+        "level": "warn",
+        "logger": ""
+    }
+```
+
+- **timestamp** - a function that returns a timestamp. Used when messages sending in json format
 - **maxQueueSize** - the number of items in queue before we are throwing away the oldest message in queue.
 - **backoffStrategy** - function used to calculate the next send interval.
 - **onMessageDropped** - called when a message is dropped due to max queue size reached.
