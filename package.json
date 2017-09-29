@@ -21,7 +21,7 @@
     "url": "git@github.com:kutuluk/loglevel-plugin-remote.git"
   },
   "license": "MIT",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "main": "./lib/loglevel-plugin-remote",
   "babel": {
     "presets": [
@@ -40,13 +40,13 @@
     "publish-to-npm": "npm install && npm run build && npm publish"
   },
   "devDependencies": {
-    "babel-cli": "^6.24.1",
+    "babel-cli": "^6.26.0",
     "babel-plugin-add-module-exports": "^0.2.1",
     "babel-plugin-transform-es2015-modules-umd": "^6.24.1",
-    "babel-preset-env": "^1.5.1",
+    "babel-preset-env": "^1.6.0",
     "eslint": "^3.19.0",
-    "eslint-config-airbnb-base": "^11.2.0",
-    "eslint-plugin-import": "^2.3.0",
-    "uglify-js": "^3.0.11"
+    "eslint-config-airbnb-base": "^11.3.2",
+    "eslint-plugin-import": "^2.7.0",
+    "uglify-js": "^3.1.2"
   }
 }
