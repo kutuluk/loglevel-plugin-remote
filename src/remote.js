@@ -138,8 +138,8 @@ const defaults = {
   json: false,
   timestamp: () => new Date().toISOString(),
   backoff: (interval) => {
-    const doubleIt = interval * 2;
-    return doubleIt > 30000 ? 30000 : doubleIt;
+    const doubleInterval = interval * 2;
+    return doubleInterval > 30000 ? 30000 : doubleInterval;
   },
   onMessageDropped: () => {},
 };
@@ -187,7 +187,6 @@ const apply = function apply(logger, options) {
 
     const suspend = () => {
       isSuspended = true;
-      suspendInterval = options.backoff(suspendInterval);
 
       const up = () => {
         isSuspended = false;
@@ -195,6 +194,8 @@ const apply = function apply(logger, options) {
       };
 
       setTimeout(up, suspendInterval);
+
+      suspendInterval = options.backoff(suspendInterval);
     };
 
     const cancel = () => {
