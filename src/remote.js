@@ -188,6 +188,12 @@ const apply = function apply(logger, options) {
     const suspend = () => {
       isSuspended = true;
 
+      if (!(options.queueSize && queue.length >= options.queueSize)) {
+        queue.unshift(msg);
+      } else {
+        options.onMessageDropped(msg);
+      }
+
       const up = () => {
         isSuspended = false;
         send();
@@ -199,9 +205,8 @@ const apply = function apply(logger, options) {
     };
 
     const cancel = () => {
-      xhr.abort();
-      queue.unshift(msg);
       isSending = false;
+      xhr.abort();
       suspend();
     };
 
@@ -213,16 +218,11 @@ const apply = function apply(logger, options) {
       isSending = false;
       clearTimeout(timeout);
 
-      if (xhr.status !== 200) {
-        if (!(options.queueSize && queue.length >= options.queueSize)) {
-          queue.unshift(msg);
-        } else {
-          options.onMessageDropped(msg);
-        }
-        suspend();
-      } else {
+      if (xhr.status === 200) {
         suspendInterval = 1;
         setTimeout(send, 0);
+      } else {
+        suspend();
       }
     };
 

@@ -36,8 +36,8 @@ var defaults = {
     return new Date().toISOString();
   },
   backoff: function (interval) {
-    let doubleIt = interval  * 2
-    return doubleIt > 30000 ? 30000 : doubleIt
+    var doubleInterval = interval * 2;
+    return doubleInterval > 30000 ? 30000 : doubleInterval;
   },
   onMessageDropped: (msg) => {}
 }
