@@ -195,7 +195,7 @@ const apply = function apply(logger, options) {
       if (!(options.queueSize && queue.length >= options.queueSize)) {
         queue.unshift(msg);
       } else {
-        options.onMessageDropped(msg);
+        options.onMessageDropped(msg.message);
       }
 
       const up = () => {
