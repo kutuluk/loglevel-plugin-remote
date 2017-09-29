@@ -34,8 +34,8 @@ var defaults = {
   timestamp: function () {
     return new Date().toISOString();
   },
-  maxQueueSize: 500,
-  backoffStrategy: function (interval) {
+  queueSize: 0,
+  backoff: function (interval) {
     let doubleIt = interval  * 2
     return doubleIt > 30000 ? 30000 : doubleIt
   },
@@ -61,8 +61,8 @@ var defaults = {
 ```
 
 - **timestamp** - a function that returns a timestamp. Used when messages sending in json format
-- **maxQueueSize** - the number of items in queue before we are throwing away the oldest message in queue.
-- **backoffStrategy** - function used to calculate the next send interval.
+- **queueSize** - the number of items in queue before we are throwing away the oldest message in queue. 0 by default it makes the queue unlimited.
+- **backoff** - function used to calculate the next suspend interval if the send is failed.
 - **onMessageDropped** - called when a message is dropped due to max queue size reached.
 
 ## Base usage

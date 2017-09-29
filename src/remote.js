@@ -116,7 +116,8 @@ const hasStack = !!stackTrace();
 const queue = [];
 let isAssigned = false;
 let isSending = false;
-let sendInterval = 1;
+let isSuspended = false;
+let suspendInterval = 1;
 
 let origin = '';
 if (window && window.location) {
@@ -134,8 +135,8 @@ const defaults = {
   depth: 0,
   json: false,
   timestamp: () => new Date().toISOString(),
-  maxQueueSize: 500,
-  backoffStrategy: (interval) => {
+  queueSize: 0,
+  backoff: (interval) => {
     const doubleIt = interval * 2;
     return doubleIt > 30000 ? 30000 : doubleIt;
   },
@@ -167,7 +168,7 @@ const apply = function apply(logger, options) {
   const contentType = options.json ? 'application/json' : 'text/plain';
 
   const send = () => {
-    if (!queue.length || isSending) {
+    if (!queue.length || isSending || isSuspended) {
       return;
     }
 
@@ -183,13 +184,23 @@ const apply = function apply(logger, options) {
       xhr.setRequestHeader('Authorization', `Bearer ${options.token}`);
     }
 
+    const suspend = () => {
+      suspendInterval = options.backoff(suspendInterval);
+      isSuspended = true;
+
+      const up = () => {
+        isSuspended = false;
+        send();
+      };
+
+      setTimeout(up, suspendInterval);
+    };
+
     const cancel = () => {
-      // if (xhr.readyState !== 4) {
       xhr.abort();
       queue.unshift(msg);
       isSending = false;
-      setTimeout(send, sendInterval);
-      // }
+      suspend();
     };
 
     xhr.onreadystatechange = () => {
@@ -198,36 +209,32 @@ const apply = function apply(logger, options) {
       }
 
       if (xhr.status !== 200) {
-        const queueMaxSizeReached = queue.length >= options.maxQueueSize;
-        const queueEmptyAndDisabled = options.maxQueueSize === 0 && queue.length === 0;
-        if (!queueMaxSizeReached || queueEmptyAndDisabled) {
+        if (!(options.queueSize && queue.length >= options.queueSize)) {
           queue.unshift(msg);
         } else if (options.onMessageDropped) {
           options.onMessageDropped(msg);
         }
-        sendInterval = options.backoffStrategy(sendInterval);
+        suspend();
       } else {
-        sendInterval = 1;
+        suspendInterval = 1;
       }
 
       isSending = false;
-      if (timeout) clearTimeout(timeout);
-      setTimeout(send, sendInterval);
+      clearTimeout(timeout);
+      setTimeout(send, 0);
     };
 
     if (hasTimeoutSupport) {
       xhr.timeout = options.timeout;
       xhr.ontimeout = cancel;
+    } else if (options.timeout) {
+      timeout = setTimeout(cancel, options.timeout);
     }
 
     if (options.json) {
       xhr.send(tryStringify(msg));
     } else {
       xhr.send(`${msg.message}${msg.stacktrace}`);
-    }
-
-    if (!hasTimeoutSupport && options.timeout) {
-      timeout = setTimeout(cancel, options.timeout);
     }
   };
 
@@ -241,12 +248,10 @@ const apply = function apply(logger, options) {
       if (options.json) {
         timestamp = options.timestamp();
       }
-      
-      if (queue.length !== 0 && queue.length >= options.maxQueueSize) {
+
+      if (options.queueSize && queue.length >= options.queueSize) {
         const droppedMsg = queue.shift();
-        if (options.onMessageDropped) {
-          options.onMessageDropped(droppedMsg);
-        }
+        options.onMessageDropped(droppedMsg.message);
       }
 
       let stack = hasStack && methodName in trace ? stackTrace() : '';
@@ -284,7 +289,6 @@ const apply = function apply(logger, options) {
 
 const remote = {};
 remote.apply = apply;
-remote.name = 'loglevel-plugin-remote';
 
 const save = window ? window.remote : undefined;
 remote.noConflict = () => {
