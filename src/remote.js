@@ -114,7 +114,6 @@ const stackTrace = () => {
 
 const hasStack = !!stackTrace();
 const queue = [];
-let suspendInterval = 1;
 
 let isAssigned = false;
 let isSending = false;
@@ -132,14 +131,15 @@ const defaults = {
   url: `${origin}/logger`,
   token: '',
   timeout: 0,
+  suspend: 100,
   queueSize: 0,
   trace: ['trace', 'warn', 'error'],
   depth: 0,
   json: false,
   timestamp: () => new Date().toISOString(),
-  backoff: (interval) => {
-    const doubleInterval = interval * 2;
-    return doubleInterval > 30000 ? 30000 : doubleInterval;
+  backoff: (suspend) => {
+    const doubleSuspend = suspend * 2;
+    return doubleSuspend > 30000 ? 30000 : doubleSuspend;
   },
   onMessageDropped: () => {},
 };
@@ -169,6 +169,8 @@ const apply = function apply(logger, options) {
   const authHeader = `Bearer ${options.token}`;
 
   const contentType = options.json ? 'application/json' : 'text/plain';
+
+  let suspendInterval = options.suspend;
 
   const send = () => {
     if (!queue.length || isSending || isSuspended) {
@@ -221,7 +223,7 @@ const apply = function apply(logger, options) {
       clearTimeout(timeout);
 
       if (xhr.status === 200) {
-        suspendInterval = 1;
+        suspendInterval = options.suspend;
         setTimeout(send, 0);
       } else {
         suspend();

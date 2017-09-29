@@ -28,6 +28,7 @@ var defaults = {
   url: window.location.origin + '/logger',
   token: '',
   timeout: 0,
+  suspend: 100,
   queueSize: 0,
   trace: ['trace', 'warn', 'error'],
   depth: 0,
@@ -35,18 +36,19 @@ var defaults = {
   timestamp: function () {
     return new Date().toISOString();
   },
-  backoff: function (interval) {
-    var doubleInterval = interval * 2;
-    return doubleInterval > 30000 ? 30000 : doubleInterval;
+  backoff: function (suspend) {
+    var doubleSuspend = suspend * 2;
+    return doubleSuspend > 30000 ? 30000 : doubleSuspend;
   },
-  onMessageDropped: (msg) => {}
+  onMessageDropped: function (msg) {}
 }
 ```
 
 - **url** - log server URL
 - **token** - token for Bearer authentication scheme (e.g. UUID: "9fda563b-7103-4f3c-ad93-4fe0085ce75c") (see [RFC 6750](https://tools.ietf.org/html/rfc6750))
 - **timeout** - timeout in milliseconds (see [MDN](https://developer.mozilla.org/docs/Web/API/XMLHttpRequest/timeout))
-- **queueSize** - the number of items in queue before we are throwing away the oldest message in queue. 0 by default it makes the queue unlimited.
+- **suspend** - the time in milliseconds during which, after a failed send the message, no attempt is made to send it again
+- **queueSize** - the number of items in queue before we are throwing away the oldest message in queue. 0 by default it makes the queue unlimited
 - **trace** - lots of levels for which to add the stack trace
 - **depth** - number of following plugins (affects the number of rows to clear the stack trace)
 - **json** - when set to true, it sends messages in json format:
@@ -62,8 +64,8 @@ var defaults = {
 ```
 
 - **timestamp** - a function that returns a timestamp. Used when messages sending in json format
-- **backoff** - function used to calculate the next suspend interval if the send is failed.
-- **onMessageDropped** - called when a message is dropped due to max queue size reached.
+- **backoff** - a function used to increase the suspend interval after each failed send
+- **onMessageDropped** - called when a message is dropped due to max queue size reached
 
 ## Base usage
 
