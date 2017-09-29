@@ -166,6 +166,8 @@ const apply = function apply(logger, options) {
     trace[key] = true;
   }
 
+  const authHeader = `Bearer ${options.token}`;
+
   const contentType = options.json ? 'application/json' : 'text/plain';
 
   const send = () => {
@@ -182,7 +184,7 @@ const apply = function apply(logger, options) {
     xhr.setRequestHeader('Content-Type', contentType);
 
     if (options.token) {
-      xhr.setRequestHeader('Authorization', `Bearer ${options.token}`);
+      xhr.setRequestHeader('Authorization', authHeader);
     }
 
     const suspend = () => {
