@@ -114,10 +114,11 @@ const stackTrace = () => {
 
 const hasStack = !!stackTrace();
 const queue = [];
+let suspendInterval = 1;
+
 let isAssigned = false;
 let isSending = false;
 let isSuspended = false;
-let suspendInterval = 1;
 
 let origin = '';
 if (window && window.location) {
@@ -131,11 +132,11 @@ const defaults = {
   url: `${origin}/logger`,
   token: '',
   timeout: 0,
+  queueSize: 0,
   trace: ['trace', 'warn', 'error'],
   depth: 0,
   json: false,
   timestamp: () => new Date().toISOString(),
-  queueSize: 0,
   backoff: (interval) => {
     const doubleIt = interval * 2;
     return doubleIt > 30000 ? 30000 : doubleIt;
@@ -185,8 +186,8 @@ const apply = function apply(logger, options) {
     }
 
     const suspend = () => {
-      suspendInterval = options.backoff(suspendInterval);
       isSuspended = true;
+      suspendInterval = options.backoff(suspendInterval);
 
       const up = () => {
         isSuspended = false;
@@ -208,20 +209,20 @@ const apply = function apply(logger, options) {
         return;
       }
 
+      isSending = false;
+      clearTimeout(timeout);
+
       if (xhr.status !== 200) {
         if (!(options.queueSize && queue.length >= options.queueSize)) {
           queue.unshift(msg);
-        } else if (options.onMessageDropped) {
+        } else {
           options.onMessageDropped(msg);
         }
         suspend();
       } else {
         suspendInterval = 1;
+        setTimeout(send, 0);
       }
-
-      isSending = false;
-      clearTimeout(timeout);
-      setTimeout(send, 0);
     };
 
     if (hasTimeoutSupport) {
