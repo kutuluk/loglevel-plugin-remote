@@ -116,8 +116,6 @@ const hasStack = !!stackTrace();
 const queue = [];
 
 let isAssigned = false;
-let isSending = false;
-let isSuspended = false;
 
 let origin = '';
 if (window && window.location) {
@@ -156,7 +154,6 @@ const apply = function apply(logger, options) {
   if (!window || !window.XMLHttpRequest) return logger;
 
   isAssigned = true;
-  const hasTimeoutSupport = 'ontimeout' in new window.XMLHttpRequest();
 
   options = merge({}, defaults, options);
 
@@ -166,10 +163,12 @@ const apply = function apply(logger, options) {
     trace[key] = true;
   }
 
-  const authHeader = `Bearer ${options.token}`;
-
+  const authorization = `Bearer ${options.token}`;
   const contentType = options.json ? 'application/json' : 'text/plain';
+  const hasTimeoutSupport = 'ontimeout' in new window.XMLHttpRequest();
 
+  let isSending = false;
+  let isSuspended = false;
   let suspendInterval = options.suspend;
 
   const send = () => {
@@ -178,15 +177,15 @@ const apply = function apply(logger, options) {
     }
 
     isSending = true;
+
     const msg = queue.shift();
     let timeout;
 
     const xhr = new window.XMLHttpRequest();
     xhr.open('POST', options.url, true);
     xhr.setRequestHeader('Content-Type', contentType);
-
     if (options.token) {
-      xhr.setRequestHeader('Authorization', authHeader);
+      xhr.setRequestHeader('Authorization', authorization);
     }
 
     const suspend = () => {
@@ -224,7 +223,7 @@ const apply = function apply(logger, options) {
 
       if (xhr.status === 200) {
         suspendInterval = options.suspend;
-        setTimeout(send, 0);
+        send();
       } else {
         suspend();
       }
@@ -293,8 +292,7 @@ const apply = function apply(logger, options) {
   return logger;
 };
 
-const remote = {};
-remote.apply = apply;
+const remote = { apply };
 
 const save = window ? window.remote : undefined;
 remote.noConflict = () => {
