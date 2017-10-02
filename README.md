@@ -63,13 +63,24 @@ var defaults = {
 - **json** - when set to true, it sends messages in json format:
 
 ```json
-    {
-        "message": "Text of message",
-        "stacktrace": "at http://localhost/js/test.js:11:5",
-        "timestamp": "2017-05-29T12:53:46.000Z", 
-        "level": "warn",
-        "logger": ""
-    }
+{
+    "messages": [
+        {
+            "message": "Message one",
+            "stacktrace": "at http://localhost/test.js:11:5",
+            "timestamp": "2017-05-29T12:53:46.000Z",
+            "level": "info",
+            "logger": ""
+        },
+        {
+            "message": "Message two",
+            "stacktrace": "at http://localhost/test.js:12:5",
+            "timestamp": "2017-05-29T12:53:46.001Z",
+            "level": "warn",
+            "logger": ""
+        }
+    ]
+}
 ```
 
 - **timestamp** - a function that returns a timestamp. Used when messages sending in json format

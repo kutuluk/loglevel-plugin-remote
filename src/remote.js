@@ -273,11 +273,15 @@ const apply = function apply(logger, options) {
 
       if (options.json) {
         queue.push({
-          message: format(args),
-          stacktrace: stack,
-          timestamp,
-          level: methodName,
-          logger: loggerName,
+          messages: [
+            {
+              message: format(args),
+              stacktrace: stack,
+              timestamp,
+              level: methodName,
+              logger: loggerName,
+            },
+          ],
         });
       } else {
         queue.push({
