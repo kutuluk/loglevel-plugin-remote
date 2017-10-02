@@ -37,8 +37,16 @@ var defaults = {
     return new Date().toISOString();
   },
   backoff: function (suspend) {
-    var doubleSuspend = suspend * 2;
-    return doubleSuspend > 30000 ? 30000 : doubleSuspend;
+    var expFactor = 2;
+    var jitter = 0.1;
+    var maxSuspend = 30000;
+
+    var newSuspend = suspend * expFactor;
+    if (newSuspend > maxSuspend) {
+      newSuspend = maxSuspend;
+    }
+    newSuspend += newSuspend * jitter * Math.random();
+    return newSuspend;
   }
 }
 ```

@@ -136,8 +136,16 @@ const defaults = {
   json: false,
   timestamp: () => new Date().toISOString(),
   backoff: (suspend) => {
-    const doubleSuspend = suspend * 2;
-    return doubleSuspend > 30000 ? 30000 : doubleSuspend;
+    const expFactor = 2;
+    const jitter = 0.1;
+    const maxSuspend = 30000;
+
+    let newSuspend = suspend * expFactor;
+    if (newSuspend > maxSuspend) {
+      newSuspend = maxSuspend;
+    }
+    newSuspend += newSuspend * jitter * Math.random();
+    return newSuspend;
   },
 };
 
