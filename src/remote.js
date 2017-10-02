@@ -139,7 +139,6 @@ const defaults = {
     const doubleSuspend = suspend * 2;
     return doubleSuspend > 30000 ? 30000 : doubleSuspend;
   },
-  onMessageDropped: () => {},
 };
 
 const apply = function apply(logger, options) {
@@ -193,8 +192,6 @@ const apply = function apply(logger, options) {
 
       if (!(options.queueSize && queue.length >= options.queueSize)) {
         queue.unshift(msg);
-      } else {
-        options.onMessageDropped(msg.message);
       }
 
       const up = () => {
@@ -255,8 +252,7 @@ const apply = function apply(logger, options) {
       }
 
       if (options.queueSize && queue.length >= options.queueSize) {
-        const droppedMsg = queue.shift();
-        options.onMessageDropped(droppedMsg.message);
+        queue.shift();
       }
 
       let stack = hasStack && methodName in trace ? stackTrace() : '';

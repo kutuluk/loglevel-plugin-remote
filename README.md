@@ -39,8 +39,7 @@ var defaults = {
   backoff: function (suspend) {
     var doubleSuspend = suspend * 2;
     return doubleSuspend > 30000 ? 30000 : doubleSuspend;
-  },
-  onMessageDropped: function (msg) {}
+  }
 }
 ```
 
@@ -65,7 +64,6 @@ var defaults = {
 
 - **timestamp** - a function that returns a timestamp. Used when messages sending in json format
 - **backoff** - a function used to increase the suspend interval after each failed send
-- **onMessageDropped** - called when a message is dropped due to max queue size reached
 
 ## Base usage
 
