@@ -15,6 +15,8 @@ npm install loglevel-plugin-remote --save
 
 ## API
 
+**This plugin is under active development. No guarantees regarding API stability are made. Backward compatibility is guaranteed only by path releases.**
+
 ```javascript
 apply(log[, options]);
 ```
