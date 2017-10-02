@@ -112,8 +112,8 @@ const stackTrace = () => {
   }
 };
 
-const hasStack = !!stackTrace();
-const queue = [];
+const hasStackSupport = !!stackTrace();
+let queue = [];
 
 let isAssigned = false;
 
@@ -177,6 +177,7 @@ const apply = function apply(logger, options) {
   let isSending = false;
   let isSuspended = false;
   let suspendInterval = options.suspend;
+  let sendingMessages;
 
   const send = () => {
     if (!queue.length || isSending || isSuspended) {
@@ -185,7 +186,26 @@ const apply = function apply(logger, options) {
 
     isSending = true;
 
-    const msg = queue.shift();
+    if (!sendingMessages) {
+      sendingMessages = { messages: queue };
+      queue = [];
+
+      let content = '';
+
+      if (options.json) {
+        content = tryStringify({ messages: sendingMessages.messages });
+      } else {
+        let separator = '';
+        sendingMessages.messages.forEach((message) => {
+          content += separator;
+          content += message.message;
+          separator = '\n';
+        });
+      }
+
+      sendingMessages.content = content;
+    }
+
     let timeout;
 
     const xhr = new window.XMLHttpRequest();
@@ -197,10 +217,6 @@ const apply = function apply(logger, options) {
 
     const suspend = () => {
       isSuspended = true;
-
-      if (!(options.queueSize && queue.length >= options.queueSize)) {
-        queue.unshift(msg);
-      }
 
       const up = () => {
         isSuspended = false;
@@ -228,6 +244,7 @@ const apply = function apply(logger, options) {
 
       if (xhr.status === 200) {
         suspendInterval = options.suspend;
+        sendingMessages = undefined;
         send();
       } else {
         suspend();
@@ -241,16 +258,13 @@ const apply = function apply(logger, options) {
       timeout = setTimeout(cancel, options.timeout);
     }
 
-    if (options.json) {
-      xhr.send(tryStringify(msg));
-    } else {
-      xhr.send(`${msg.message}${msg.stacktrace}`);
-    }
+    xhr.send(sendingMessages.content);
   };
 
   const originalFactory = logger.methodFactory;
   logger.methodFactory = function methodFactory(methodName, logLevel, loggerName) {
     const rawMethod = originalFactory(methodName, logLevel, loggerName);
+    const hasStack = hasStackSupport && methodName in trace;
 
     return (...args) => {
       let timestamp;
@@ -263,7 +277,7 @@ const apply = function apply(logger, options) {
         queue.shift();
       }
 
-      let stack = hasStack && methodName in trace ? stackTrace() : '';
+      let stack = hasStack ? stackTrace() : '';
 
       if (stack) {
         const lines = stack.split('\n');
@@ -273,20 +287,16 @@ const apply = function apply(logger, options) {
 
       if (options.json) {
         queue.push({
-          messages: [
-            {
-              message: format(args),
-              stacktrace: stack,
-              timestamp,
-              level: methodName,
-              logger: loggerName,
-            },
-          ],
+          message: format(args),
+          stacktrace: stack,
+          timestamp,
+          level: methodName,
+          logger: loggerName,
         });
       } else {
+        const stacktrace = stack ? `\n${stack}` : '';
         queue.push({
-          message: format(args),
-          stacktrace: stack ? `\n${stack}` : '',
+          message: `${format(args)}${stacktrace}`,
         });
       }
 
