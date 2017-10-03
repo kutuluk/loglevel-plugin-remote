@@ -180,7 +180,7 @@ const apply = function apply(logger, options) {
   let sendingMessages;
 
   const send = () => {
-    if (!queue.length || isSending || isSuspended) {
+    if (isSuspended || isSending || !(queue.length || sendingMessages)) {
       return;
     }
 
