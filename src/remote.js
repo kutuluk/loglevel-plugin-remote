@@ -113,9 +113,6 @@ const stackTrace = () => {
 };
 
 const hasStackSupport = !!stackTrace();
-let queue = [];
-
-let isAssigned = false;
 
 let origin = '';
 if (window && window.location) {
@@ -139,15 +136,15 @@ const defaults = {
     const expFactor = 2;
     const jitter = 0.1;
     const maxSuspend = 30000;
-
     let newSuspend = suspend * expFactor;
-    if (newSuspend > maxSuspend) {
-      newSuspend = maxSuspend;
-    }
+    if (newSuspend > maxSuspend) newSuspend = maxSuspend;
     newSuspend += newSuspend * jitter * Math.random();
     return newSuspend;
   },
 };
+
+let isAssigned = false;
+let queue = [];
 
 const apply = function apply(logger, options) {
   if (!logger || !logger.getLogger) {
@@ -172,7 +169,6 @@ const apply = function apply(logger, options) {
 
   const authorization = `Bearer ${options.token}`;
   const contentType = options.json ? 'application/json' : 'text/plain';
-  const hasTimeoutSupport = 'ontimeout' in new window.XMLHttpRequest();
 
   let isSending = false;
   let isSuspended = false;
@@ -189,7 +185,6 @@ const apply = function apply(logger, options) {
     if (!sendingMessages) {
       sendingMessages = { messages: queue };
       queue = [];
-
       let content = '';
 
       if (options.json) {
@@ -197,16 +192,14 @@ const apply = function apply(logger, options) {
       } else {
         let separator = '';
         sendingMessages.messages.forEach((message) => {
-          content += separator;
-          content += message.message;
+          const stacktrace = message.stacktrace ? `\n${message.stacktrace}` : '';
+          content += `${separator}${message.message}${stacktrace}`;
           separator = '\n';
         });
       }
 
       sendingMessages.content = content;
     }
-
-    let timeout;
 
     const xhr = new window.XMLHttpRequest();
     xhr.open('POST', options.url, true);
@@ -234,6 +227,8 @@ const apply = function apply(logger, options) {
       suspend();
     };
 
+    let timeout;
+
     xhr.onreadystatechange = () => {
       if (xhr.readyState !== 4) {
         return;
@@ -251,33 +246,26 @@ const apply = function apply(logger, options) {
       }
     };
 
-    if (hasTimeoutSupport) {
-      xhr.timeout = options.timeout;
-      xhr.ontimeout = cancel;
-    } else if (options.timeout) {
+    xhr.send(sendingMessages.content);
+
+    if (options.timeout) {
       timeout = setTimeout(cancel, options.timeout);
     }
-
-    xhr.send(sendingMessages.content);
   };
 
   const originalFactory = logger.methodFactory;
   logger.methodFactory = function methodFactory(methodName, logLevel, loggerName) {
     const rawMethod = originalFactory(methodName, logLevel, loggerName);
-    const hasStack = hasStackSupport && methodName in trace;
+    const needStack = hasStackSupport && methodName in trace;
 
     return (...args) => {
-      let timestamp;
-
-      if (options.json) {
-        timestamp = options.timestamp();
-      }
+      const timestamp = options.timestamp();
 
       if (options.queueSize && queue.length >= options.queueSize) {
         queue.shift();
       }
 
-      let stack = hasStack ? stackTrace() : '';
+      let stack = needStack ? stackTrace() : '';
 
       if (stack) {
         const lines = stack.split('\n');
@@ -285,20 +273,13 @@ const apply = function apply(logger, options) {
         stack = lines.join('\n');
       }
 
-      if (options.json) {
-        queue.push({
-          message: format(args),
-          stacktrace: stack,
-          timestamp,
-          level: methodName,
-          logger: loggerName,
-        });
-      } else {
-        const stacktrace = stack ? `\n${stack}` : '';
-        queue.push({
-          message: `${format(args)}${stacktrace}`,
-        });
-      }
+      queue.push({
+        message: format(args),
+        stacktrace: stack,
+        timestamp,
+        level: methodName,
+        logger: loggerName,
+      });
 
       send();
 

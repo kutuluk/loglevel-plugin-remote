@@ -42,11 +42,8 @@ var defaults = {
     var expFactor = 2;
     var jitter = 0.1;
     var maxSuspend = 30000;
-
     var newSuspend = suspend * expFactor;
-    if (newSuspend > maxSuspend) {
-      newSuspend = maxSuspend;
-    }
+    if (newSuspend > maxSuspend) newSuspend = maxSuspend;
     newSuspend += newSuspend * jitter * Math.random();
     return newSuspend;
   }
