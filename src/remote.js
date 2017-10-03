@@ -104,15 +104,15 @@ const merge = function merge(target) {
   return target;
 };
 
-const stackTrace = () => {
+const getStacktrace = () => {
   try {
     throw new Error('');
-  } catch (test) {
-    return test.stack;
+  } catch (trace) {
+    return trace.stack;
   }
 };
 
-const hasStackSupport = !!stackTrace();
+const hasStacktraceSupport = !!getStacktrace();
 
 let origin = '';
 if (window && window.location) {
@@ -160,12 +160,6 @@ const apply = function apply(logger, options) {
   isAssigned = true;
 
   options = merge({}, defaults, options);
-
-  const trace = {};
-  for (let i = 0; i < options.trace.length; i += 1) {
-    const key = options.trace[i];
-    trace[key] = true;
-  }
 
   const authorization = `Bearer ${options.token}`;
   const contentType = options.json ? 'application/json' : 'text/plain';
@@ -256,7 +250,7 @@ const apply = function apply(logger, options) {
   const originalFactory = logger.methodFactory;
   logger.methodFactory = function methodFactory(methodName, logLevel, loggerName) {
     const rawMethod = originalFactory(methodName, logLevel, loggerName);
-    const needStack = hasStackSupport && methodName in trace;
+    const needStack = hasStacktraceSupport && options.trace.some(level => level === methodName);
 
     return (...args) => {
       const timestamp = options.timestamp();
@@ -265,17 +259,17 @@ const apply = function apply(logger, options) {
         queue.shift();
       }
 
-      let stack = needStack ? stackTrace() : '';
+      let stacktrace = needStack ? getStacktrace() : '';
 
-      if (stack) {
-        const lines = stack.split('\n');
+      if (stacktrace) {
+        const lines = stacktrace.split('\n');
         lines.splice(0, options.depth + 3);
-        stack = lines.join('\n');
+        stacktrace = lines.join('\n');
       }
 
       queue.push({
         message: format(args),
-        stacktrace: stack,
+        stacktrace,
         timestamp,
         level: methodName,
         logger: loggerName,
