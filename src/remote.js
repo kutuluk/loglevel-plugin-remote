@@ -115,38 +115,29 @@ function getStacktrace() {
   }
 }
 
-let origin = '';
-if (window && window.location) {
-  origin = window.location.origin || '';
-}
-if (!origin && document && document.location) {
-  origin = document.location.origin || '';
-}
-
 const defaults = {
-  url: `${origin}/logger`,
+  url: '/logger',
   token: '',
   timeout: 0,
-  suspend: 100,
-  queueSize: 0,
+  interval: 100,
+  backoff: (interval) => {
+    const multiplier = 2;
+    const jitter = 0.1;
+    const limit = 30000;
+    let next = interval * multiplier;
+    if (next > limit) next = limit;
+    next += next * jitter * Math.random();
+    return next;
+  },
+  capacity: 0,
   trace: ['trace', 'warn', 'error'],
   depth: 0,
   json: false,
   timestamp: () => new Date().toISOString(),
-  backoff: (suspend) => {
-    const expFactor = 2;
-    const jitter = 0.1;
-    const maxSuspend = 30000;
-    let newSuspend = suspend * expFactor;
-    if (newSuspend > maxSuspend) newSuspend = maxSuspend;
-    newSuspend += newSuspend * jitter * Math.random();
-    return newSuspend;
-  },
 };
 
 const hasStacktraceSupport = !!getStacktrace();
 let isAssigned = false;
-let queue = [];
 
 function apply(logger, options) {
   if (!logger || !logger.getLogger) {
@@ -168,7 +159,8 @@ function apply(logger, options) {
 
   let isSending = false;
   let isSuspended = false;
-  let suspendInterval = options.suspend;
+  let interval = options.interval;
+  let queue = [];
   let sending = { messages: [] };
 
   function send() {
@@ -181,7 +173,9 @@ function apply(logger, options) {
     if (!sending.messages.length) {
       sending.messages = queue;
       queue = [];
+    }
 
+    if (!sending.content) {
       if (options.json) {
         sending.content = tryStringify({ messages: sending.messages });
       } else {
@@ -202,14 +196,17 @@ function apply(logger, options) {
       xhr.setRequestHeader('Authorization', authorization);
     }
 
-    function suspend() {
+    function suspend(successful) {
+      isSuspended = true;
+
       setTimeout(() => {
         isSuspended = false;
         send();
-      }, suspendInterval);
+      }, interval);
 
-      isSuspended = true;
-      suspendInterval = options.backoff(suspendInterval);
+      if (!successful) {
+        interval = options.backoff(interval);
+      }
     }
 
     let timeout;
@@ -230,9 +227,9 @@ function apply(logger, options) {
       clearTimeout(timeout);
 
       if (xhr.status === 200) {
-        suspendInterval = options.suspend;
+        interval = options.interval;
         sending = { messages: [] };
-        send();
+        suspend(true);
       } else {
         suspend();
       }
@@ -247,26 +244,33 @@ function apply(logger, options) {
     const needStack = hasStacktraceSupport && options.trace.some(level => level === methodName);
 
     return (...args) => {
-      if (!options.queueSize || queue.length + sending.messages.length < options.queueSize) {
-        const timestamp = options.timestamp();
-
-        let stacktrace = needStack ? getStacktrace() : '';
-        if (stacktrace) {
-          const lines = stacktrace.split('\n');
-          lines.splice(0, options.depth + 3);
-          stacktrace = lines.join('\n');
+      if (options.capacity && queue.length + sending.messages.length >= options.capacity) {
+        if (sending.messages.length) {
+          sending.messages.shift();
+          sending.content = '';
+        } else {
+          queue.shift();
         }
-
-        queue.push({
-          message: format(args),
-          level: methodName,
-          logger: loggerName,
-          timestamp,
-          stacktrace,
-        });
-
-        send();
       }
+
+      const timestamp = options.timestamp();
+
+      let stacktrace = needStack ? getStacktrace() : '';
+      if (stacktrace) {
+        const lines = stacktrace.split('\n');
+        lines.splice(0, options.depth + 3);
+        stacktrace = lines.join('\n');
+      }
+
+      queue.push({
+        message: format(args),
+        level: methodName,
+        logger: loggerName,
+        timestamp,
+        stacktrace,
+      });
+
+      send();
 
       rawMethod(...args);
     };

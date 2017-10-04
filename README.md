@@ -18,7 +18,7 @@ npm install loglevel-plugin-remote --save
 **This plugin is under active development and should be considered as an unstable. No guarantees regarding API stability are made. Backward compatibility is guaranteed only by path releases.**
 
 ```javascript
-apply(log[, options]);
+apply(log, options);
 ```
 
 **log** - root logger, imported from loglevel package
@@ -26,37 +26,36 @@ apply(log[, options]);
 **options** - configuration object
 
 ```javascript
-var defaults = {
-  url: window.location.origin + '/logger',
+const defaults = {
+  url: '/logger',
   token: '',
   timeout: 0,
-  suspend: 100,
-  queueSize: 0,
+  interval: 100,
+  backoff: (interval) => {
+    const multiplier = 2;
+    const jitter = 0.1;
+    const limit = 30000;
+    let next = interval * multiplier;
+    if (next > limit) next = limit;
+    next += next * jitter * Math.random();
+    return next;
+  },
+  capacity: 0,
   trace: ['trace', 'warn', 'error'],
   depth: 0,
   json: false,
-  timestamp: function () {
-    return new Date().toISOString();
-  },
-  backoff: function (suspend) {
-    var expFactor = 2;
-    var jitter = 0.1;
-    var maxSuspend = 30000;
-    var newSuspend = suspend * expFactor;
-    if (newSuspend > maxSuspend) newSuspend = maxSuspend;
-    newSuspend += newSuspend * jitter * Math.random();
-    return newSuspend;
-  }
-}
+  timestamp: () => new Date().toISOString(),
+};
 ```
 
 - **url** - log server URL
 - **token** - token for Bearer authentication scheme (e.g. UUID: "9fda563b-7103-4f3c-ad93-4fe0085ce75c") (see [RFC 6750](https://tools.ietf.org/html/rfc6750))
-- **timeout** - timeout in milliseconds (see [MDN](https://developer.mozilla.org/docs/Web/API/XMLHttpRequest/timeout))
-- **suspend** - the time in milliseconds during which, after a failed send the message, no attempt is made to send it again
-- **queueSize** - the number of items in queue before we are throwing away the oldest message in queue. 0 by default it makes the queue unlimited
+- **timeout** - timeout in milliseconds (see [XMLHttpRequest.timeout](https://developer.mozilla.org/docs/Web/API/XMLHttpRequest/timeout))
+- **interval** - time in milliseconds between sending messages
+- **backoff** - a function used to increase the sending interval after each failed send. By default, it doubles the interval and adds 10% jitter. Having reached the value of 30 seconds, the interval increase stops. After successful sending, the interval will be reset to the initial value.
+- **capacity** - the size of the queue in which messages are accumulated between sending. Overflow will delete the oldest messages. By default is 0, which makes the queue unlimited.
 - **trace** - lots of levels for which to add the stack trace
-- **depth** - number of following plugins (affects the number of rows to clear the stack trace)
+- **depth** - the number of following plugins (affects the number of rows to clear the stack trace)
 - **json** - when set to true, it sends messages in json format:
 
 ```json
@@ -80,18 +79,15 @@ var defaults = {
 }
 ```
 
-- **timestamp** - a function that returns a timestamp. Used when messages sending in json format
-- **backoff** - a function used to increase the suspend interval after each failed send
+- **timestamp** - a function that returns a timestamp and used when messages sending in json format. By default, it returns the time in the ISO format (see [ISO 8601](https://en.wikipedia.org/wiki/ISO_8601))
 
 ## Base usage
 
 ### Browser directly
 
-Download [production version](https://raw.githubusercontent.com/kutuluk/loglevel-plugin-remote/master/dist/loglevel-plugin-remote.min.js)
-and copy to your project folder
 ```html
-<script src="loglevel.min.js"></script>
-<script src="loglevel-plugin-remote.min.js"></script>
+<script src="https://unpkg.com/loglevel/dist/loglevel.min.js"></script>
+<script src="https://unpkg.com/loglevel-plugin-remote/dist/loglevel-plugin-remote.min.js"></script>
 
 <script>
   var logger = log.noConflict();
