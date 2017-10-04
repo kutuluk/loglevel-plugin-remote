@@ -260,28 +260,26 @@ function apply(logger, options) {
     const needStack = hasStacktraceSupport && options.trace.some(level => level === methodName);
 
     return (...args) => {
-      if (options.queueSize && queue.length + sending.length >= options.queueSize) {
-        return;
+      if (!(options.queueSize && queue.length + sending.length >= options.queueSize)) {
+        const timestamp = options.timestamp();
+        let stacktrace = needStack ? getStacktrace() : '';
+
+        if (stacktrace) {
+          const lines = stacktrace.split('\n');
+          lines.splice(0, options.depth + 3);
+          stacktrace = lines.join('\n');
+        }
+
+        queue.push({
+          message: format(args),
+          stacktrace,
+          timestamp,
+          level: methodName,
+          logger: loggerName,
+        });
+
+        send();
       }
-
-      const timestamp = options.timestamp();
-      let stacktrace = needStack ? getStacktrace() : '';
-
-      if (stacktrace) {
-        const lines = stacktrace.split('\n');
-        lines.splice(0, options.depth + 3);
-        stacktrace = lines.join('\n');
-      }
-
-      queue.push({
-        message: format(args),
-        stacktrace,
-        timestamp,
-        level: methodName,
-        logger: loggerName,
-      });
-
-      send();
 
       rawMethod(...args);
     };
