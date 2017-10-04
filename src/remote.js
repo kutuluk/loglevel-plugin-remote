@@ -15,7 +15,7 @@ function tryStringify(arg) {
         CIRCULAR_ERROR_MESSAGE = circular.message;
       }
     }
-    if (error.name === 'TypeError' && error.message === CIRCULAR_ERROR_MESSAGE) {
+    if (error.message === CIRCULAR_ERROR_MESSAGE) {
       return '[Circular]';
     }
     throw error;
@@ -93,6 +93,7 @@ function format(array) {
   return result;
 }
 
+// Object.assign({}, ...sources) light ponyfill
 function assign() {
   const target = {};
   for (let s = 0; s < arguments.length; s += 1) {
@@ -160,7 +161,6 @@ function apply(logger, options) {
 
   isAssigned = true;
 
-  // options = Object.assign({}, defaults, options);
   options = assign(defaults, options);
 
   const authorization = `Bearer ${options.token}`;
@@ -182,11 +182,11 @@ function apply(logger, options) {
       sending.messages = queue;
       queue = [];
 
-      sending.content = '';
       if (options.json) {
         sending.content = tryStringify({ messages: sending.messages });
       } else {
         let separator = '';
+        sending.content = '';
         sending.messages.forEach((message) => {
           const stacktrace = message.stacktrace ? `\n${message.stacktrace}` : '';
           sending.content += `${separator}${message.message}${stacktrace}`;
@@ -213,6 +213,13 @@ function apply(logger, options) {
     }
 
     let timeout;
+    if (options.timeout) {
+      timeout = setTimeout(() => {
+        isSending = false;
+        xhr.abort();
+        suspend();
+      }, options.timeout);
+    }
 
     xhr.onreadystatechange = () => {
       if (xhr.readyState !== 4) {
@@ -232,14 +239,6 @@ function apply(logger, options) {
     };
 
     xhr.send(sending.content);
-
-    if (options.timeout) {
-      timeout = setTimeout(() => {
-        isSending = false;
-        xhr.abort();
-        suspend();
-      }, options.timeout);
-    }
   }
 
   const originalFactory = logger.methodFactory;
@@ -250,8 +249,8 @@ function apply(logger, options) {
     return (...args) => {
       if (!options.queueSize || queue.length + sending.messages.length < options.queueSize) {
         const timestamp = options.timestamp();
-        let stacktrace = needStack ? getStacktrace() : '';
 
+        let stacktrace = needStack ? getStacktrace() : '';
         if (stacktrace) {
           const lines = stacktrace.split('\n');
           lines.splice(0, options.depth + 3);
@@ -260,10 +259,10 @@ function apply(logger, options) {
 
         queue.push({
           message: format(args),
-          stacktrace,
-          timestamp,
           level: methodName,
           logger: loggerName,
+          timestamp,
+          stacktrace,
         });
 
         send();
