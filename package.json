@@ -25,7 +25,16 @@
   "main": "./lib/loglevel-plugin-remote",
   "babel": {
     "presets": [
-      "env"
+      [
+        "env",
+        {
+          "targets": {
+            "browsers": [
+              "ie >= 7"
+            ]
+          }
+        }
+      ]
     ],
     "plugins": [
       "add-module-exports",

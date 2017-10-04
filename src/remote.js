@@ -44,7 +44,7 @@ function getConstructorName(obj) {
   return '';
 }
 
-const format = function format(array) {
+function format(array) {
   let result = '';
   let index = 0;
 
@@ -91,28 +91,38 @@ const format = function format(array) {
   }
 
   return result;
-};
+}
 
-const merge = function merge(target) {
-  for (let i = 1; i < arguments.length; i += 1) {
-    for (const prop in arguments[i]) {
-      if (Object.prototype.hasOwnProperty.call(arguments[i], prop)) {
-        target[prop] = arguments[i][prop];
+function assign() {
+  const target = {};
+  for (let s = 0; s < arguments.length; s += 1) {
+    const source = Object(arguments[s]);
+    for (const key in source) {
+      if (Object.prototype.hasOwnProperty.call(source, key)) {
+        target[key] = source[key];
       }
     }
   }
   return target;
-};
+}
 
-const getStacktrace = () => {
+function getStacktrace() {
   try {
-    throw new Error('');
+    throw new Error();
   } catch (trace) {
     return trace.stack;
   }
-};
+}
 
 const hasStacktraceSupport = !!getStacktrace();
+
+function emptySending() {
+  return {
+    messages: [],
+    length: 0,
+    content: '',
+  };
+}
 
 let origin = '';
 if (window && window.location) {
@@ -146,7 +156,7 @@ const defaults = {
 let isAssigned = false;
 let queue = [];
 
-const apply = function apply(logger, options) {
+function apply(logger, options) {
   if (!logger || !logger.getLogger) {
     throw new TypeError('Argument is not a root loglevel object');
   }
@@ -159,7 +169,8 @@ const apply = function apply(logger, options) {
 
   isAssigned = true;
 
-  options = merge({}, defaults, options);
+  // options = Object.assign({}, defaults, options);
+  options = assign(defaults, options);
 
   const authorization = `Bearer ${options.token}`;
   const contentType = options.json ? 'application/json' : 'text/plain';
@@ -167,32 +178,32 @@ const apply = function apply(logger, options) {
   let isSending = false;
   let isSuspended = false;
   let suspendInterval = options.suspend;
-  let sendingMessages;
+  let sending = emptySending();
 
-  const send = () => {
-    if (isSuspended || isSending || !(queue.length || sendingMessages)) {
+  function send() {
+    if (isSuspended || isSending || !(queue.length || sending.length)) {
       return;
     }
 
     isSending = true;
 
-    if (!sendingMessages) {
-      sendingMessages = { messages: queue };
+    if (!sending.length) {
+      sending.messages = queue;
+      sending.length = queue.length;
       queue = [];
-      let content = '';
 
+      let content = '';
       if (options.json) {
-        content = tryStringify({ messages: sendingMessages.messages });
+        content = tryStringify({ messages: sending.messages });
       } else {
         let separator = '';
-        sendingMessages.messages.forEach((message) => {
+        sending.messages.forEach((message) => {
           const stacktrace = message.stacktrace ? `\n${message.stacktrace}` : '';
           content += `${separator}${message.message}${stacktrace}`;
           separator = '\n';
         });
       }
-
-      sendingMessages.content = content;
+      sending.content = content;
     }
 
     const xhr = new window.XMLHttpRequest();
@@ -202,24 +213,16 @@ const apply = function apply(logger, options) {
       xhr.setRequestHeader('Authorization', authorization);
     }
 
-    const suspend = () => {
+    function suspend() {
       isSuspended = true;
 
-      const up = () => {
+      setTimeout(() => {
         isSuspended = false;
         send();
-      };
-
-      setTimeout(up, suspendInterval);
+      }, suspendInterval);
 
       suspendInterval = options.backoff(suspendInterval);
-    };
-
-    const cancel = () => {
-      isSending = false;
-      xhr.abort();
-      suspend();
-    };
+    }
 
     let timeout;
 
@@ -233,19 +236,23 @@ const apply = function apply(logger, options) {
 
       if (xhr.status === 200) {
         suspendInterval = options.suspend;
-        sendingMessages = undefined;
+        sending = emptySending();
         send();
       } else {
         suspend();
       }
     };
 
-    xhr.send(sendingMessages.content);
+    xhr.send(sending.content);
 
     if (options.timeout) {
-      timeout = setTimeout(cancel, options.timeout);
+      timeout = setTimeout(() => {
+        isSending = false;
+        xhr.abort();
+        suspend();
+      }, options.timeout);
     }
-  };
+  }
 
   const originalFactory = logger.methodFactory;
   logger.methodFactory = function methodFactory(methodName, logLevel, loggerName) {
@@ -253,12 +260,11 @@ const apply = function apply(logger, options) {
     const needStack = hasStacktraceSupport && options.trace.some(level => level === methodName);
 
     return (...args) => {
-      const timestamp = options.timestamp();
-
-      if (options.queueSize && queue.length >= options.queueSize) {
-        queue.shift();
+      if (options.queueSize && queue.length + sending.length >= options.queueSize) {
+        return;
       }
 
+      const timestamp = options.timestamp();
       let stacktrace = needStack ? getStacktrace() : '';
 
       if (stacktrace) {
@@ -283,7 +289,7 @@ const apply = function apply(logger, options) {
 
   logger.setLevel(logger.getLevel());
   return logger;
-};
+}
 
 const remote = { apply };
 
