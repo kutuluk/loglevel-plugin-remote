@@ -114,16 +114,6 @@ function getStacktrace() {
   }
 }
 
-const hasStacktraceSupport = !!getStacktrace();
-
-function emptySending() {
-  return {
-    messages: [],
-    length: 0,
-    content: '',
-  };
-}
-
 let origin = '';
 if (window && window.location) {
   origin = window.location.origin || '';
@@ -153,6 +143,7 @@ const defaults = {
   },
 };
 
+const hasStacktraceSupport = !!getStacktrace();
 let isAssigned = false;
 let queue = [];
 
@@ -178,32 +169,30 @@ function apply(logger, options) {
   let isSending = false;
   let isSuspended = false;
   let suspendInterval = options.suspend;
-  let sending = emptySending();
+  let sending = { messages: [] };
 
   function send() {
-    if (isSuspended || isSending || !(queue.length || sending.length)) {
+    if (isSuspended || isSending || !(queue.length || sending.messages.length)) {
       return;
     }
 
     isSending = true;
 
-    if (!sending.length) {
+    if (!sending.messages.length) {
       sending.messages = queue;
-      sending.length = queue.length;
       queue = [];
 
-      let content = '';
+      sending.content = '';
       if (options.json) {
-        content = tryStringify({ messages: sending.messages });
+        sending.content = tryStringify({ messages: sending.messages });
       } else {
         let separator = '';
         sending.messages.forEach((message) => {
           const stacktrace = message.stacktrace ? `\n${message.stacktrace}` : '';
-          content += `${separator}${message.message}${stacktrace}`;
+          sending.content += `${separator}${message.message}${stacktrace}`;
           separator = '\n';
         });
       }
-      sending.content = content;
     }
 
     const xhr = new window.XMLHttpRequest();
@@ -214,13 +203,12 @@ function apply(logger, options) {
     }
 
     function suspend() {
-      isSuspended = true;
-
       setTimeout(() => {
         isSuspended = false;
         send();
       }, suspendInterval);
 
+      isSuspended = true;
       suspendInterval = options.backoff(suspendInterval);
     }
 
@@ -236,7 +224,7 @@ function apply(logger, options) {
 
       if (xhr.status === 200) {
         suspendInterval = options.suspend;
-        sending = emptySending();
+        sending = { messages: [] };
         send();
       } else {
         suspend();
@@ -260,7 +248,7 @@ function apply(logger, options) {
     const needStack = hasStacktraceSupport && options.trace.some(level => level === methodName);
 
     return (...args) => {
-      if (!(options.queueSize && queue.length + sending.length >= options.queueSize)) {
+      if (!options.queueSize || queue.length + sending.messages.length < options.queueSize) {
         const timestamp = options.timestamp();
         let stacktrace = needStack ? getStacktrace() : '';
 
