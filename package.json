@@ -43,6 +43,7 @@
   },
   "scripts": {
     "eslint": "eslint src/remote.js",
+    "test": "mocha",
     "babel": "babel ./src/remote.js --out-file ./lib/loglevel-plugin-remote.js",
     "uglifyjs": "uglifyjs ./lib/loglevel-plugin-remote.js -o ./dist/loglevel-plugin-remote.min.js -c -m reserved=[remote]",
     "build": "npm run babel && npm run uglifyjs",
@@ -53,9 +54,15 @@
     "babel-plugin-add-module-exports": "^0.2.1",
     "babel-plugin-transform-es2015-modules-umd": "^6.24.1",
     "babel-preset-env": "^1.6.0",
+    "chai": "^4.1.2",
     "eslint": "^3.19.0",
     "eslint-config-airbnb-base": "^11.3.2",
+    "eslint-plugin-chai-friendly": "^0.4.0",
     "eslint-plugin-import": "^2.7.0",
+    "loglevel": "^1.5.0",
+    "loglevel-plugin-mock": "^0.1.0",
+    "mocha": "^4.0.0",
+    "sinon": "^4.0.1",
     "uglify-js": "^3.1.2"
   }
 }

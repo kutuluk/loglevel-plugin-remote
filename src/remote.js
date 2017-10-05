@@ -137,20 +137,26 @@ const defaults = {
 };
 
 const hasStacktraceSupport = !!getStacktrace();
-let isAssigned = false;
+
+// let isAssigned = false;
+
+let loglevel;
+let originalFactory;
+let pluginFactory;
 
 function apply(logger, options) {
   if (!logger || !logger.getLogger) {
     throw new TypeError('Argument is not a root loglevel object');
   }
 
-  if (isAssigned) {
-    throw new TypeError('You can assign a plugin only one time');
+  if (loglevel) {
+    throw new Error('You can assign a plugin only one time');
   }
 
   if (!window || !window.XMLHttpRequest) return logger;
 
-  isAssigned = true;
+  // isAssigned = true;
+  loglevel = logger;
 
   options = assign(defaults, options);
 
@@ -159,9 +165,61 @@ function apply(logger, options) {
 
   let isSending = false;
   let isSuspended = false;
+  let isOverflowed = false;
+
   let interval = options.interval;
   let queue = [];
   let sending = { messages: [] };
+
+  class Storage {
+    constructor() {
+      this.storage = window.localStorage;
+
+      /*
+      let buffer = '';
+      for (;;) {
+        try {
+          buffer += new Array(1024 * 1024).join('A'); // 2 mB (each JS character is 2 bytes)
+          this.storage.quota = buffer;
+        } catch (quota) {
+          this.QUOTA_EXCEEDED_ERR = quota.name;
+          this.storage.removeItem('quota');
+          break;
+        }
+      }
+      */
+    }
+
+    push(messages) {
+      const oldMessages = JSON.parse(this.storage.messages);
+      for (;;) {
+        const newMessages = JSON.stringify(oldMessages.concat(messages));
+        try {
+          this.storage.messages = newMessages;
+          break;
+        } catch (quota) {
+          oldMessages.splice(0, options.capacity);
+        }
+      }
+    }
+
+    shift(count) {
+      const messages = JSON.parse(this.storage.messages);
+      const shifted = messages.splice(0, count);
+      this.storage.messages = JSON.stringify(messages);
+      return shifted;
+    }
+
+    unshift(messages) {
+      const oldMessages = JSON.parse(this.storage.messages);
+      const newMessages = JSON.stringify(messages.concat(oldMessages));
+      try {
+        this.storage.messages = newMessages;
+        // eslint-disable-next-line no-empty
+      } catch (ignore) {}
+    }
+  }
+  const storage = new Storage();
 
   function send() {
     if (isSuspended || isSending || !(queue.length || sending.messages.length)) {
@@ -171,8 +229,20 @@ function apply(logger, options) {
     isSending = true;
 
     if (!sending.messages.length) {
-      sending.messages = queue;
-      queue = [];
+      if (isOverflowed) {
+        sending.messages = storage.shift(options.capacity);
+        if (!sending.messages.length) {
+          isOverflowed = false;
+          sending.messages = queue;
+          queue = [];
+        }
+      } else {
+        sending.messages = queue;
+        queue = [];
+      }
+    } else if (isOverflowed) {
+      storage.unshift(sending.messages);
+      sending.messages = storage.shift(options.capacity);
     }
 
     if (!sending.content) {
@@ -238,21 +308,14 @@ function apply(logger, options) {
     xhr.send(sending.content);
   }
 
-  const originalFactory = logger.methodFactory;
-  logger.methodFactory = function methodFactory(methodName, logLevel, loggerName) {
+  // const originalFactory = logger.methodFactory;
+  originalFactory = originalFactory || logger.methodFactory;
+
+  pluginFactory = function methodFactory(methodName, logLevel, loggerName) {
     const rawMethod = originalFactory(methodName, logLevel, loggerName);
     const needStack = hasStacktraceSupport && options.trace.some(level => level === methodName);
 
     return (...args) => {
-      if (options.capacity && queue.length + sending.messages.length >= options.capacity) {
-        if (sending.messages.length) {
-          sending.messages.shift();
-          sending.content = '';
-        } else {
-          queue.shift();
-        }
-      }
-
       const timestamp = options.timestamp();
 
       let stacktrace = needStack ? getStacktrace() : '';
@@ -260,6 +323,17 @@ function apply(logger, options) {
         const lines = stacktrace.split('\n');
         lines.splice(0, options.depth + 3);
         stacktrace = lines.join('\n');
+      }
+
+      if (isOverflowed) {
+        if (options.capacity && queue.length >= options.capacity) {
+          storage.push(queue);
+          queue = [];
+        }
+      } else if (options.capacity && queue.length + sending.messages.length >= options.capacity) {
+        isOverflowed = true;
+        storage.push(queue);
+        queue = [];
       }
 
       queue.push({
@@ -276,11 +350,30 @@ function apply(logger, options) {
     };
   };
 
+  logger.methodFactory = pluginFactory;
   logger.setLevel(logger.getLevel());
   return logger;
 }
 
-const remote = { apply };
+function disable() {
+  if (!loglevel) {
+    throw new Error("You can't disable a not appled plugin");
+  }
+
+  if (pluginFactory !== loglevel.methodFactory) {
+    throw new Error("You can't disable a plugin after appling another plugin");
+  }
+
+  loglevel.methodFactory = originalFactory;
+  loglevel.setLevel(loglevel.getLevel());
+  originalFactory = undefined;
+  loglevel = undefined;
+}
+
+const remote = {
+  apply,
+  disable,
+};
 
 const save = window ? window.remote : undefined;
 remote.noConflict = () => {

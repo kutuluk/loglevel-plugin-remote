@@ -1,7 +1,8 @@
-# loglevel-plugin-remote
+# loglevel-plugin-remote [![NPM version](https://img.shields.io/npm/v/loglevel-plugin-remote.svg?style=flat)](https://www.npmjs.com/package/loglevel-plugin-remote)
+
 Plugin for sending [loglevel](https://github.com/pimterry/loglevel) messages to a remote log server
 
-# Features
+## Features
 - Sends asynchronously and does not slow down the application
 - Messages are sent one by one, so the order is maintained
 - Support any server that accepts a Post request
@@ -10,7 +11,7 @@ Plugin for sending [loglevel](https://github.com/pimterry/loglevel) messages to 
 ## Installation
 
 ```sh
-npm install loglevel-plugin-remote --save
+npm install loglevel-plugin-remote
 ```
 
 ## API
