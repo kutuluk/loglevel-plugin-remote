@@ -1,30 +1,33 @@
-# loglevel-plugin-remote [![NPM version](https://img.shields.io/npm/v/loglevel-plugin-remote.svg?style=flat)](https://www.npmjs.com/package/loglevel-plugin-remote)
+# loglevel-plugin-remote
 
-Plugin for sending [loglevel](https://github.com/pimterry/loglevel) messages to a remote log server
+A [loglevel](https://github.com/pimterry/loglevel) plugin for sending logs to a server.
+
+[![NPM version](https://img.shields.io/npm/v/loglevel-plugin-remote.svg?style=flat-square)](https://www.npmjs.com/package/loglevel-plugin-remote)[![Build Status](https://img.shields.io/travis/kutuluk/loglevel-plugin-remote/master.svg?style=flat-square)](https://travis-ci.org/kutuluk/loglevel-plugin-remote)
 
 ## Features
-- Sends asynchronously and does not slow down the application
-- Messages are sent one by one, so the order is maintained
-- Support any server that accepts a Post request
-- Support string substitutions like console and node.js (%s, %d, %j, %o)
+
+- Sends logs asynchronously with a specified frequency using only one request at a time.
+- Slows the frequency of sending after a fail and restores after success.
+- Supports Bearer authentication scheme
+- Provides string substitutions like console and node.js (%s, %d, %j, %o)
 
 ## Installation
 
 ```sh
-npm install loglevel-plugin-remote
+npm i loglevel-plugin-remote --save
 ```
 
 ## API
 
 **This plugin is under active development and should be considered as an unstable. No guarantees regarding API stability are made. Backward compatibility is guaranteed only by path releases.**
 
-```javascript
-apply(log, options);
-```
+#### ```apply(loglevel, options)```
+This method applies the plugin to the loglevel.
 
-**log** - root logger, imported from loglevel package
+#### Parameters
+```loglevel``` - the root logger, imported from loglevel package
 
-**options** - configuration object
+```options``` - an optional configuration object
 
 ```javascript
 const defaults = {
@@ -42,6 +45,7 @@ const defaults = {
     return next;
   },
   capacity: 0,
+  persist: 'default',
   trace: ['trace', 'warn', 'error'],
   depth: 0,
   json: false,
@@ -49,15 +53,20 @@ const defaults = {
 };
 ```
 
-- **url** - log server URL
-- **token** - token for Bearer authentication scheme (e.g. UUID: "9fda563b-7103-4f3c-ad93-4fe0085ce75c") (see [RFC 6750](https://tools.ietf.org/html/rfc6750))
-- **timeout** - timeout in milliseconds (see [XMLHttpRequest.timeout](https://developer.mozilla.org/docs/Web/API/XMLHttpRequest/timeout))
-- **interval** - time in milliseconds between sending messages
-- **backoff** - a function used to increase the sending interval after each failed send. By default, it doubles the interval and adds 10% jitter. Having reached the value of 30 seconds, the interval increase stops. After successful sending, the interval will be reset to the initial value.
-- **capacity** - the size of the queue in which messages are accumulated between sending. Overflow will delete the oldest messages. By default is 0, which makes the queue unlimited.
-- **trace** - lots of levels for which to add the stack trace
-- **depth** - the number of following plugins (affects the number of rows to clear the stack trace)
-- **json** - when set to true, it sends messages in json format:
+* **url** - log server URL
+* **token** - token for Bearer authentication scheme (see [RFC 6750](https://tools.ietf.org/html/rfc6750)), e.g. [UUID](https://en.wikipedia.org/wiki/Universally_unique_identifier) or [JWT](https://jwt.io/))
+* **timeout** - timeout in milliseconds (see [XMLHttpRequest.timeout](https://developer.mozilla.org/docs/Web/API/XMLHttpRequest/timeout))
+* **interval** - time in milliseconds between sending messages
+* **backoff** - a function used to increase the sending interval after each failed send. By default, it doubles the interval and adds 10% jitter. Having reached the value of 30 seconds, the interval increase stops. After successful sending, the interval will be reset to the initial value.
+* **capacity** - the size of the queue in which messages are accumulated between sending. Overflow will delete the oldest messages. By default is 0, which makes the queue unlimited.
+* **persist** - a string parameter that takes one of the following values: 'never', 'overflow', 'always' and defines the strategy for storing logs in a persistent storage.
+
+  * ```'default'``` Logs will be saved to the hard disk only if the sending fails and stops after recovery.
+  * ```'never'``` Logs are stored only in memory (highest productivity).
+  * ```'always'``` Each log before sending will be stored on the hard disk. Very low productivity, used only in extreme cases, when it is necessary to guarantee the safety of logs.
+* **trace** - lots of levels for which to add the stack trace
+* **depth** - the number of following plugins (affects the number of rows to clear the stack trace)
+* **json** - when set to true, it sends messages in json format:
 
 ```json
 {
@@ -80,7 +89,10 @@ const defaults = {
 }
 ```
 
-- **timestamp** - a function that returns a timestamp and used when messages sending in json format. By default, it returns the time in the ISO format (see [ISO 8601](https://en.wikipedia.org/wiki/ISO_8601))
+* **timestamp** - a function that returns a timestamp and used when messages sending in json format. By default, it returns the time in the ISO format (see [ISO 8601](https://en.wikipedia.org/wiki/ISO_8601))
+
+### ```disable()```
+This method cancels the effect of the plugin.
 
 ## Base usage
 

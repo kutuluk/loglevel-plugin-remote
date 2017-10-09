@@ -1,3 +1,5 @@
+const signature = 'loglevel-plugin-remote';
+
 let CIRCULAR_ERROR_MESSAGE;
 
 // https://github.com/nodejs/node/blob/master/lib/util.js
@@ -115,6 +117,126 @@ function getStacktrace() {
   }
 }
 
+function Memory(capacity, never) {
+  let queue = [];
+
+  this.length = () => queue.length;
+
+  this.push = (message) => {
+    if (never && capacity && queue.length >= capacity) {
+      queue.shift();
+    }
+    queue.push(message[0]);
+  };
+
+  this.send = () => {
+    const sent = queue;
+    queue = [];
+    return sent;
+  };
+}
+
+function Storage() {
+  const local = window ? window.localStorage : undefined;
+
+  if (!local) {
+    return;
+  }
+
+  let get;
+  let set;
+  let remove;
+
+  try {
+    get = local.getItem.bind(local);
+    set = local.setItem.bind(local);
+    remove = local.removeItem.bind(local);
+    const testKey = `${signature}-test`;
+    set(testKey, testKey);
+    remove(testKey);
+  } catch (notsupport) {
+    return;
+  }
+
+  /*
+  let buffer = '';
+  const quotaKey = `${signature}-quota`;
+  for (;;) {
+    try {
+      buffer += new Array(1024 * 1024).join('A'); // 2 mB (each JS character is 2 bytes)
+      set(quotaKey, buffer);
+    } catch (quota) {
+      this.QUOTA_EXCEEDED_ERR = quota.name;
+      remove(quotaKey);
+      break;
+    }
+  }
+  */
+
+  const queueKey = `${signature}-queue`;
+  const sentKey = `${signature}-sent`;
+
+  let queue = [];
+
+  const sentJSON = get(sentKey);
+  if (sentJSON) {
+    queue = JSON.parse(sentJSON);
+    remove(sentKey);
+  }
+
+  const queueJSON = get(queueKey);
+  if (queueJSON) {
+    queue = queue.concat(JSON.parse(queueJSON));
+  }
+
+  set(queueKey, JSON.stringify(queue));
+
+  this.length = () => queue.length;
+
+  this.push = (messages) => {
+    if (messages.length) {
+      queue = queue.concat(messages);
+      for (;;) {
+        const json = JSON.stringify(queue);
+        try {
+          set(queueKey, json);
+          break;
+        } catch (quota) {
+          queue.splice(0, messages.length);
+        }
+      }
+    }
+  };
+
+  this.shift = (count) => {
+    const shifted = queue.splice(0, count);
+    set(queueKey, JSON.stringify(queue));
+    return shifted;
+  };
+
+  this.send = (count) => {
+    const sent = this.shift(count);
+    set(sentKey, JSON.stringify(sent));
+    return sent;
+  };
+
+  this.confirm = () => {
+    remove(sentKey);
+  };
+
+  this.unshift = (messages) => {
+    if (messages.length) {
+      const unshifted = messages.concat(queue);
+      const json = JSON.stringify(unshifted);
+      try {
+        set(queueKey, json);
+        queue = unshifted;
+        // eslint-disable-next-line no-empty
+      } catch (ignore) {}
+    }
+  };
+}
+
 const defaults = {
   url: '/logger',
   token: '',
@@ -130,6 +252,7 @@ const defaults = {
     return next;
   },
   capacity: 0,
+  persist: 'default',
   trace: ['trace', 'warn', 'error'],
   depth: 0,
   json: false,
@@ -137,8 +260,6 @@ const defaults = {
 };
 
 const hasStacktraceSupport = !!getStacktrace();
-
-// let isAssigned = false;
 
 let loglevel;
 let originalFactory;
@@ -155,7 +276,6 @@ function apply(logger, options) {
 
   if (!window || !window.XMLHttpRequest) return logger;
 
-  // isAssigned = true;
   loglevel = logger;
 
   options = assign(defaults, options);
@@ -163,87 +283,36 @@ function apply(logger, options) {
   const authorization = `Bearer ${options.token}`;
   const contentType = options.json ? 'application/json' : 'text/plain';
 
+  const storage = new Storage();
+  if (!storage.push) {
+    options.persist = 'never';
+  }
+  const memory = new Memory(options.capacity, options.persist === 'never');
+
   let isSending = false;
   let isSuspended = false;
-  let isOverflowed = false;
 
   let interval = options.interval;
-  let queue = [];
   let sending = { messages: [] };
-
-  class Storage {
-    constructor() {
-      this.storage = window.localStorage;
-
-      /*
-      let buffer = '';
-      for (;;) {
-        try {
-          buffer += new Array(1024 * 1024).join('A'); // 2 mB (each JS character is 2 bytes)
-          this.storage.quota = buffer;
-        } catch (quota) {
-          this.QUOTA_EXCEEDED_ERR = quota.name;
-          this.storage.removeItem('quota');
-          break;
-        }
-      }
-      */
-    }
-
-    push(messages) {
-      const oldMessages = JSON.parse(this.storage.messages);
-      for (;;) {
-        const newMessages = JSON.stringify(oldMessages.concat(messages));
-        try {
-          this.storage.messages = newMessages;
-          break;
-        } catch (quota) {
-          oldMessages.splice(0, options.capacity);
-        }
-      }
-    }
-
-    shift(count) {
-      const messages = JSON.parse(this.storage.messages);
-      const shifted = messages.splice(0, count);
-      this.storage.messages = JSON.stringify(messages);
-      return shifted;
-    }
-
-    unshift(messages) {
-      const oldMessages = JSON.parse(this.storage.messages);
-      const newMessages = JSON.stringify(messages.concat(oldMessages));
-      try {
-        this.storage.messages = newMessages;
-        // eslint-disable-next-line no-empty
-      } catch (ignore) {}
-    }
-  }
-  const storage = new Storage();
+  let destination = options.persist === 'always' ? storage : memory;
 
   function send() {
-    if (isSuspended || isSending || !(queue.length || sending.messages.length)) {
+    if (isSuspended || isSending) {
       return;
     }
 
-    isSending = true;
-
     if (!sending.messages.length) {
-      if (isOverflowed) {
-        sending.messages = storage.shift(options.capacity);
-        if (!sending.messages.length) {
-          isOverflowed = false;
-          sending.messages = queue;
-          queue = [];
-        }
+      if (storage.length()) {
+        // sending.messages = storage.send(options.capacity);
+        sending.messages = storage.send(storage.length());
+      } else if (memory.length()) {
+        sending.messages = memory.send();
       } else {
-        sending.messages = queue;
-        queue = [];
+        return;
       }
-    } else if (isOverflowed) {
-      storage.unshift(sending.messages);
-      sending.messages = storage.shift(options.capacity);
     }
+
+    isSending = true;
 
     if (!sending.content) {
       if (options.json) {
@@ -276,6 +345,13 @@ function apply(logger, options) {
 
       if (!successful) {
         interval = options.backoff(interval);
+        if (options.persist !== 'never' && destination !== storage) {
+          storage.unshift(sending.messages);
+          storage.confirm();
+          sending = { messages: [] };
+          storage.push(memory.send());
+          destination = storage;
+        }
       }
     }
 
@@ -299,6 +375,10 @@ function apply(logger, options) {
       if (xhr.status === 200) {
         interval = options.interval;
         sending = { messages: [] };
+        storage.confirm();
+        if (options.persist !== 'always') {
+          destination = memory;
+        }
         suspend(true);
       } else {
         suspend();
@@ -308,7 +388,6 @@ function apply(logger, options) {
     xhr.send(sending.content);
   }
 
-  // const originalFactory = logger.methodFactory;
   originalFactory = originalFactory || logger.methodFactory;
 
   pluginFactory = function methodFactory(methodName, logLevel, loggerName) {
@@ -325,24 +404,15 @@ function apply(logger, options) {
         stacktrace = lines.join('\n');
       }
 
-      if (isOverflowed) {
-        if (options.capacity && queue.length >= options.capacity) {
-          storage.push(queue);
-          queue = [];
-        }
-      } else if (options.capacity && queue.length + sending.messages.length >= options.capacity) {
-        isOverflowed = true;
-        storage.push(queue);
-        queue = [];
-      }
-
-      queue.push({
-        message: format(args),
-        level: methodName,
-        logger: loggerName,
-        timestamp,
-        stacktrace,
-      });
+      destination.push([
+        {
+          message: format(args),
+          level: methodName,
+          logger: loggerName,
+          timestamp,
+          stacktrace,
+        },
+      ]);
 
       send();
 
@@ -365,9 +435,9 @@ function disable() {
   }
 
   loglevel.methodFactory = originalFactory;
-  loglevel.setLevel(loglevel.getLevel());
   originalFactory = undefined;
   loglevel = undefined;
+  loglevel.setLevel(loglevel.getLevel());
 }
 
 const remote = {
