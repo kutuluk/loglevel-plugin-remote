@@ -145,6 +145,7 @@ describe('Requests', () => {
       requests.push(request);
     };
 
+    other.apply(loglevel);
     plugin.apply(loglevel);
     loglevel.info('test error');
 

@@ -8,8 +8,9 @@ A [loglevel](https://github.com/pimterry/loglevel) plugin for sending logs to a 
 
 - Sends logs asynchronously with a specified frequency using only one request at a time.
 - Slows the frequency of sending after a fail and restores after success.
-- Supports Bearer authentication scheme
-- Provides string substitutions like console and node.js (%s, %d, %j, %o)
+- Supports Bearer authentication scheme.
+- Provides string substitutions like console and node.js (%s, %d, %j, %o).
+- In the event of a failure in sending logs can be stored in the browser and sent to the server after the connection is restored or even the next time the user visits the site.
 
 ## Installation
 
@@ -34,7 +35,7 @@ const defaults = {
   url: '/logger',
   token: '',
   timeout: 0,
-  interval: 100,
+  interval: 1000,
   backoff: (interval) => {
     const multiplier = 2;
     const jitter = 0.1;
@@ -44,8 +45,8 @@ const defaults = {
     next += next * jitter * Math.random();
     return next;
   },
-  capacity: 0,
   persist: 'default',
+  capacity: 50,
   trace: ['trace', 'warn', 'error'],
   depth: 0,
   json: false,
@@ -53,17 +54,20 @@ const defaults = {
 };
 ```
 
-* **url** - log server URL
-* **token** - token for Bearer authentication scheme (see [RFC 6750](https://tools.ietf.org/html/rfc6750)), e.g. [UUID](https://en.wikipedia.org/wiki/Universally_unique_identifier) or [JWT](https://jwt.io/))
-* **timeout** - timeout in milliseconds (see [XMLHttpRequest.timeout](https://developer.mozilla.org/docs/Web/API/XMLHttpRequest/timeout))
-* **interval** - time in milliseconds between sending messages
+* **url** - a URL of the server logging API
+* **token** - a token for Bearer authentication scheme (see [RFC 6750](https://tools.ietf.org/html/rfc6750)), e.g. [UUID](https://en.wikipedia.org/wiki/Universally_unique_identifier) or [JWT](https://jwt.io/))
+* **timeout** - a timeout in milliseconds (see [XMLHttpRequest.timeout](https://developer.mozilla.org/docs/Web/API/XMLHttpRequest/timeout))
+* **interval** - a time in milliseconds between sending messages. By default is 1000 (one second).
 * **backoff** - a function used to increase the sending interval after each failed send. By default, it doubles the interval and adds 10% jitter. Having reached the value of 30 seconds, the interval increase stops. After successful sending, the interval will be reset to the initial value.
-* **capacity** - the size of the queue in which messages are accumulated between sending. Overflow will delete the oldest messages. By default is 0, which makes the queue unlimited.
-* **persist** - a string parameter that takes one of the following values: 'never', 'overflow', 'always' and defines the strategy for storing logs in a persistent storage.
+* **persist** - a string parameter that takes one of the following values: 'never', 'always', 'default'. This option defines the strategy for storing logs.
+  * ```'never'``` Logs are stored only in memory. Highest productivity.
+  * ```'always'``` Each log before sending will be stored on the [persistent storage](https://developer.mozilla.org/en-US/docs/Web/API/Window/localStorage). Very low productivity, used only in extreme cases, when it is necessary to guarantee the safety of logs.
+  * ```'default'``` Logs will be stored on the persistent storage only if the sending fails and stops after recovery.
+* **capacity**
+  * if **persist** is ```'never'``` - the size of the queue in which messages are accumulated between sending. By default is 500.
+  * if **persist** is not ```'never'``` - the size of the persistent storage in kilobytes. By default is 50.
 
-  * ```'default'``` Logs will be saved to the hard disk only if the sending fails and stops after recovery.
-  * ```'never'``` Logs are stored only in memory (highest productivity).
-  * ```'always'``` Each log before sending will be stored on the hard disk. Very low productivity, used only in extreme cases, when it is necessary to guarantee the safety of logs.
+In both cases overflow will delete the oldest messages. It is forbidden to set the value to 0 - in this case the default value will be used.
 * **trace** - lots of levels for which to add the stack trace
 * **depth** - the number of following plugins (affects the number of rows to clear the stack trace)
 * **json** - when set to true, it sends messages in json format:
@@ -91,7 +95,7 @@ const defaults = {
 
 * **timestamp** - a function that returns a timestamp and used when messages sending in json format. By default, it returns the time in the ISO format (see [ISO 8601](https://en.wikipedia.org/wiki/ISO_8601))
 
-### ```disable()```
+#### ```disable()```
 This method cancels the effect of the plugin.
 
 ## Base usage

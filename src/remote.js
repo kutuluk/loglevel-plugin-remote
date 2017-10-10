@@ -123,7 +123,7 @@ function Memory(capacity, never) {
   this.length = () => queue.length;
 
   this.push = (message) => {
-    if (never && capacity && queue.length >= capacity) {
+    if (never && queue.length >= capacity) {
       queue.shift();
     }
     queue.push(message[0]);
@@ -136,11 +136,12 @@ function Memory(capacity, never) {
   };
 }
 
-function Storage() {
+function Storage(capacity) {
   const local = window ? window.localStorage : undefined;
+  const empty = { length: () => 0 };
 
   if (!local) {
-    return;
+    return empty;
   }
 
   let get;
@@ -155,7 +156,7 @@ function Storage() {
     set(testKey, testKey);
     remove(testKey);
   } catch (notsupport) {
-    return;
+    return empty;
   }
 
   /*
@@ -178,6 +179,20 @@ function Storage() {
 
   let queue = [];
 
+  const persist = () => {
+    for (;;) {
+      const json = JSON.stringify(queue);
+      if (json.length < capacity * 512) {
+        try {
+          set(queueKey, json);
+          break;
+          // eslint-disable-next-line no-empty
+        } catch (quota) {}
+      }
+      queue.shift();
+    }
+  };
+
   const sentJSON = get(sentKey);
   if (sentJSON) {
     queue = JSON.parse(sentJSON);
@@ -189,28 +204,20 @@ function Storage() {
     queue = queue.concat(JSON.parse(queueJSON));
   }
 
-  set(queueKey, JSON.stringify(queue));
+  persist();
 
   this.length = () => queue.length;
 
   this.push = (messages) => {
     if (messages.length) {
       queue = queue.concat(messages);
-      for (;;) {
-        const json = JSON.stringify(queue);
-        try {
-          set(queueKey, json);
-          break;
-        } catch (quota) {
-          queue.splice(0, messages.length);
-        }
-      }
+      persist();
     }
   };
 
   this.shift = (count) => {
     const shifted = queue.splice(0, count);
-    set(queueKey, JSON.stringify(queue));
+    persist();
     return shifted;
   };
 
@@ -226,22 +233,19 @@ function Storage() {
 
   this.unshift = (messages) => {
     if (messages.length) {
-      const unshifted = messages.concat(queue);
-      const json = JSON.stringify(unshifted);
-      try {
-        set(queueKey, json);
-        queue = unshifted;
-        // eslint-disable-next-line no-empty
-      } catch (ignore) {}
+      queue = messages.concat(queue);
+      persist();
     }
   };
 }
 
+const defaultMemoryCapacity = 500;
+const defaultPersistCapacity = 50;
 const defaults = {
   url: '/logger',
   token: '',
   timeout: 0,
-  interval: 100,
+  interval: 1000,
   backoff: (interval) => {
     const multiplier = 2;
     const jitter = 0.1;
@@ -251,8 +255,8 @@ const defaults = {
     next += next * jitter * Math.random();
     return next;
   },
-  capacity: 0,
   persist: 'default',
+  capacity: defaultPersistCapacity,
   trace: ['trace', 'warn', 'error'],
   depth: 0,
   json: false,
@@ -284,9 +288,16 @@ function apply(logger, options) {
   const contentType = options.json ? 'application/json' : 'text/plain';
 
   const storage = new Storage();
-  if (!storage.push) {
+
+  if (!storage.push && options.persist !== 'never') {
     options.persist = 'never';
+    options.capacity = defaultMemoryCapacity;
   }
+
+  if (!options.capacity) {
+    options.capacity = options.persist === 'never' ? defaultMemoryCapacity : defaultPersistCapacity;
+  }
+
   const memory = new Memory(options.capacity, options.persist === 'never');
 
   let isSending = false;
@@ -435,9 +446,9 @@ function disable() {
   }
 
   loglevel.methodFactory = originalFactory;
+  loglevel.setLevel(loglevel.getLevel());
   originalFactory = undefined;
   loglevel = undefined;
-  loglevel.setLevel(loglevel.getLevel());
 }
 
 const remote = {
