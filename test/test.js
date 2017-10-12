@@ -38,88 +38,86 @@ loglevel.setLevel('info');
 
 const spy = sinon.spy();
 
-describe('', () => {
-  describe('API', () => {
-    afterEach(() => {
-      try {
-        plugin.disable();
-        // eslint-disable-next-line no-empty
-      } catch (ignore) {}
-      try {
-        other.disable();
-        // eslint-disable-next-line no-empty
-      } catch (ignore) {}
-      try {
-        plugin.disable();
-        // eslint-disable-next-line no-empty
-      } catch (ignore) {}
-      spy.reset();
-    });
-
-    it('Methods', () => {
-      expect(plugin).to.have.property('apply').with.be.a('function');
-      expect(plugin).to.have.property('disable').with.be.a('function');
-      expect(plugin).to.have.property('noConflict').with.be.a('function');
-    });
-
-    it('Empty arguments', () => {
-      expect(plugin.apply).to.throw(TypeError, 'Argument is not a root loglevel object');
-    });
-
-    it('Not root loglevel argument', () => {
-      expect(() => plugin.apply(loglevel.getLogger('log'))).to.throw(
-        TypeError,
-        'Argument is not a root loglevel object'
-      );
-    });
-
-    it('Right applying', () => {
-      expect(() => plugin.apply(loglevel)).to.not.throw();
-    });
-
-    it('Reapplying should throw an exception', () => {
-      plugin.apply(loglevel);
-
-      expect(() => plugin.apply(loglevel)).to.throw(Error, 'You can assign a plugin only one time');
-    });
-
-    it('Right disabling', () => {
-      plugin.apply(loglevel);
-
-      expect(plugin.disable).to.not.throw();
-    });
-
-    it('Disabling a not appled plugin should throw an exception', () => {
-      expect(plugin.disable).to.throw(Error, "You can't disable a not appled plugin");
-    });
-
-    it('Disabling after using another plugin should throw an exception', () => {
-      plugin.apply(loglevel);
-      other.apply(loglevel);
-
-      expect(plugin.disable).to.throw(
-        Error,
-        "You can't disable a plugin after appling another plugin"
-      );
-    });
+describe('API', () => {
+  afterEach(() => {
+    try {
+      plugin.disable();
+      // eslint-disable-next-line no-empty
+    } catch (ignore) {}
+    try {
+      other.disable();
+      // eslint-disable-next-line no-empty
+    } catch (ignore) {}
+    try {
+      plugin.disable();
+      // eslint-disable-next-line no-empty
+    } catch (ignore) {}
+    spy.reset();
   });
 
-  describe('Common', () => {
-    it('All methods of the previous plugin should be called', () => {
-      other.apply(loglevel, { method: spy });
-      plugin.apply(loglevel, { persist: 'never', interval: 0 });
+  it('Methods', () => {
+    expect(plugin).to.have.property('apply').with.be.a('function');
+    expect(plugin).to.have.property('disable').with.be.a('function');
+    expect(plugin).to.have.property('noConflict').with.be.a('function');
+  });
 
-      loglevel.enableAll();
-      loglevel.trace('trace');
-      loglevel.debug('debug');
-      loglevel.info('info');
-      loglevel.warn('warn');
-      loglevel.error('error');
-      expect(spy.callCount).to.equal(5);
+  it('Empty arguments', () => {
+    expect(plugin.apply).to.throw(TypeError, 'Argument is not a root loglevel object');
+  });
 
-      plugin.disable();
-      other.disable();
-    });
+  it('Not root loglevel argument', () => {
+    expect(() => plugin.apply(loglevel.getLogger('log'))).to.throw(
+      TypeError,
+      'Argument is not a root loglevel object'
+    );
+  });
+
+  it('Right applying', () => {
+    expect(() => plugin.apply(loglevel)).to.not.throw();
+  });
+
+  it('Reapplying should throw an exception', () => {
+    plugin.apply(loglevel);
+
+    expect(() => plugin.apply(loglevel)).to.throw(Error, 'You can assign a plugin only one time');
+  });
+
+  it('Right disabling', () => {
+    plugin.apply(loglevel);
+
+    expect(plugin.disable).to.not.throw();
+  });
+
+  it('Disabling a not appled plugin should throw an exception', () => {
+    expect(plugin.disable).to.throw(Error, "You can't disable a not appled plugin");
+  });
+
+  it('Disabling after using another plugin should throw an exception', () => {
+    plugin.apply(loglevel);
+    other.apply(loglevel);
+
+    expect(plugin.disable).to.throw(
+      Error,
+      "You can't disable a plugin after appling another plugin"
+    );
+  });
+});
+
+describe('Common', () => {
+  it('All methods of the previous plugin should be called', () => {
+    other.apply(loglevel, { method: spy });
+    plugin.apply(loglevel, { persist: 'never', interval: 0 });
+
+    loglevel.enableAll();
+    loglevel.trace('trace');
+    loglevel.debug('debug');
+    loglevel.info('info');
+    loglevel.warn('warn');
+    loglevel.error('error');
+    expect(spy.callCount).to.equal(5);
+
+    plugin.disable();
+    other.disable();
   });
 });
 
@@ -156,15 +154,43 @@ describe('Requests', () => {
     other.disable();
   });
 
-  it('The message must be received', () => {
+  it('The plain log must be received', () => {
     plugin.apply(loglevel, { persist: 'never', interval: 0 });
 
-    loglevel.info('test');
+    loglevel.info('plain');
 
     server.respondWith(successful);
     server.respond();
 
-    const expected = ['test'];
+    const expected = ['plain'];
+
+    expect(expected).to.eql(received());
+  });
+
+  it('The json log must be received', () => {
+    const time = new Date().toISOString();
+    const timestamp = () => time;
+
+    plugin.apply(loglevel, { json: true, persist: 'never', interval: 0, timestamp });
+
+    loglevel.info('json');
+
+    server.respondWith(successful);
+    server.respond();
+
+    const expected = [
+      JSON.stringify({
+        messages: [
+          {
+            message: 'json',
+            level: 'info',
+            logger: '',
+            timestamp: time,
+            stacktrace: ''
+          }
+        ]
+      })
+    ];
 
     expect(expected).to.eql(received());
   });

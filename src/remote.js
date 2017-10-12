@@ -360,15 +360,9 @@ function apply(logger, options) {
 
       const messages = sender.send();
       if (options.json) {
-        sender.content = tryStringify({ messages });
+        sender.content = `{"messages":[${messages.join(',')}]}`;
       } else {
-        let separator = '';
-        sender.content = '';
-        messages.forEach((message) => {
-          const stacktrace = message.stacktrace ? `\n${message.stacktrace}` : '';
-          sender.content += `${separator}${message.message}${stacktrace}`;
-          separator = '\n';
-        });
+        sender.content = messages.join('\n');
       }
     }
 
@@ -453,15 +447,19 @@ function apply(logger, options) {
         stacktrace = lines.join('\n');
       }
 
-      receiver.push([
-        {
-          message: format(args),
-          level: methodName,
-          logger: loggerName || '',
-          timestamp,
-          stacktrace,
-        },
-      ]);
+      const message = {
+        message: format(args),
+        level: methodName,
+        logger: loggerName || '',
+        timestamp,
+        stacktrace,
+      };
+
+      const content = options.json
+        ? JSON.stringify(message)
+        : `${message.message}${message.stacktrace ? `\n${message.stacktrace}` : ''}`;
+
+      receiver.push([content]);
 
       send();
 
