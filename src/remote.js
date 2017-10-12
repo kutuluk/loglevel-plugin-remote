@@ -119,26 +119,53 @@ function getStacktrace() {
 
 function Memory(capacity, never) {
   let queue = [];
+  let sent = [];
 
   this.length = () => queue.length;
+  this.sent = () => sent.length;
 
-  this.push = (message) => {
-    if (never && queue.length >= capacity) {
+  this.push = (messages) => {
+    queue.push(messages[0]);
+    if (never && queue.length > capacity) {
       queue.shift();
     }
-    queue.push(message[0]);
   };
 
   this.send = () => {
-    const sent = queue;
-    queue = [];
+    if (!sent.length) {
+      sent = queue;
+      queue = [];
+    }
     return sent;
+  };
+
+  this.confirm = () => {
+    sent = [];
+    this.content = '';
+  };
+
+  this.fail = () => {
+    const overflow = 1 + queue.length + sent.length - capacity;
+
+    if (overflow > 0) {
+      sent.splice(0, overflow);
+      queue = sent.concat(queue);
+      this.confirm();
+    }
+    /*
+    if (queue.length + sent.length >= capacity) {
+      this.confirm();
+    }
+    */
   };
 }
 
 function Storage(capacity) {
   const local = window ? window.localStorage : undefined;
-  const empty = { length: () => 0 };
+  const empty = {
+    length: () => 0,
+    confirm: () => {},
+  };
 
   if (!local) {
     return empty;
@@ -178,10 +205,13 @@ function Storage(capacity) {
   const sentKey = `${signature}-sent`;
 
   let queue = [];
+  let sent = [];
 
   const persist = () => {
     for (;;) {
       const json = JSON.stringify(queue);
+      // console.log('json', json.length);
+      // console.log('capacity', capacity * 512);
       if (json.length < capacity * 512) {
         try {
           set(queueKey, json);
@@ -207,6 +237,7 @@ function Storage(capacity) {
   persist();
 
   this.length = () => queue.length;
+  this.sent = () => queue.sent;
 
   this.push = (messages) => {
     if (messages.length) {
@@ -215,20 +246,26 @@ function Storage(capacity) {
     }
   };
 
-  this.shift = (count) => {
-    const shifted = queue.splice(0, count);
-    persist();
-    return shifted;
-  };
-
-  this.send = (count) => {
-    const sent = this.shift(count);
-    set(sentKey, JSON.stringify(sent));
+  this.send = () => {
+    if (!sent.length) {
+      sent = queue;
+      set(sentKey, JSON.stringify(sent));
+      queue = [];
+      persist();
+    }
     return sent;
   };
 
   this.confirm = () => {
+    sent = [];
+    this.content = '';
     remove(sentKey);
+  };
+
+  this.fail = () => {
+    queue = sent.concat(queue);
+    persist();
+    this.confirm();
   };
 
   this.unshift = (messages) => {
@@ -256,7 +293,7 @@ const defaults = {
     return next;
   },
   persist: 'default',
-  capacity: defaultPersistCapacity,
+  capacity: 0,
   trace: ['trace', 'warn', 'error'],
   depth: 0,
   json: false,
@@ -287,15 +324,15 @@ function apply(logger, options) {
   const authorization = `Bearer ${options.token}`;
   const contentType = options.json ? 'application/json' : 'text/plain';
 
-  const storage = new Storage();
+  if (!options.capacity) {
+    options.capacity = options.persist === 'never' ? defaultMemoryCapacity : defaultPersistCapacity;
+  }
+
+  const storage = new Storage(options.capacity);
 
   if (!storage.push && options.persist !== 'never') {
     options.persist = 'never';
     options.capacity = defaultMemoryCapacity;
-  }
-
-  if (!options.capacity) {
-    options.capacity = options.persist === 'never' ? defaultMemoryCapacity : defaultPersistCapacity;
   }
 
   const memory = new Memory(options.capacity, options.persist === 'never');
@@ -304,40 +341,38 @@ function apply(logger, options) {
   let isSuspended = false;
 
   let interval = options.interval;
-  let sending = { messages: [] };
-  let destination = options.persist === 'always' ? storage : memory;
+  let receiver = options.persist === 'always' ? storage : memory;
+  let sender = receiver;
 
   function send() {
     if (isSuspended || isSending) {
       return;
     }
 
-    if (!sending.messages.length) {
+    if (!sender.sent()) {
       if (storage.length()) {
-        // sending.messages = storage.send(options.capacity);
-        sending.messages = storage.send(storage.length());
+        sender = storage;
       } else if (memory.length()) {
-        sending.messages = memory.send();
+        sender = memory;
       } else {
         return;
       }
-    }
 
-    isSending = true;
-
-    if (!sending.content) {
+      const messages = sender.send();
       if (options.json) {
-        sending.content = tryStringify({ messages: sending.messages });
+        sender.content = tryStringify({ messages });
       } else {
         let separator = '';
-        sending.content = '';
-        sending.messages.forEach((message) => {
+        sender.content = '';
+        messages.forEach((message) => {
           const stacktrace = message.stacktrace ? `\n${message.stacktrace}` : '';
-          sending.content += `${separator}${message.message}${stacktrace}`;
+          sender.content += `${separator}${message.message}${stacktrace}`;
           separator = '\n';
         });
       }
     }
+
+    isSending = true;
 
     const xhr = new window.XMLHttpRequest();
     xhr.open('POST', options.url, true);
@@ -347,23 +382,27 @@ function apply(logger, options) {
     }
 
     function suspend(successful) {
-      isSuspended = true;
-
-      setTimeout(() => {
-        isSuspended = false;
-        send();
-      }, interval);
+      const pause = interval;
 
       if (!successful) {
         interval = options.backoff(interval);
-        if (options.persist !== 'never' && destination !== storage) {
-          storage.unshift(sending.messages);
-          storage.confirm();
-          sending = { messages: [] };
+        sender.fail();
+        if (options.persist !== 'never' && receiver !== storage) {
           storage.push(memory.send());
-          destination = storage;
+          memory.confirm();
+          storage.push(memory.send());
+          memory.confirm();
+          receiver = storage;
         }
       }
+
+      if (pause) {
+        isSuspended = true;
+        setTimeout(() => {
+          isSuspended = false;
+          send();
+        }, pause);
+      } else send();
     }
 
     let timeout;
@@ -385,10 +424,9 @@ function apply(logger, options) {
 
       if (xhr.status === 200) {
         interval = options.interval;
-        sending = { messages: [] };
-        storage.confirm();
+        sender.confirm();
         if (options.persist !== 'always') {
-          destination = memory;
+          receiver = memory;
         }
         suspend(true);
       } else {
@@ -396,7 +434,7 @@ function apply(logger, options) {
       }
     };
 
-    xhr.send(sending.content);
+    xhr.send(sender.content);
   }
 
   originalFactory = originalFactory || logger.methodFactory;
@@ -415,11 +453,11 @@ function apply(logger, options) {
         stacktrace = lines.join('\n');
       }
 
-      destination.push([
+      receiver.push([
         {
           message: format(args),
           level: methodName,
-          logger: loggerName,
+          logger: loggerName || '',
           timestamp,
           stacktrace,
         },

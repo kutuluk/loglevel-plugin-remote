@@ -8,9 +8,9 @@ A [loglevel](https://github.com/pimterry/loglevel) plugin for sending logs to a 
 
 - Sends logs asynchronously with a specified frequency using only one request at a time.
 - Slows the frequency of sending after a fail and restores after success.
+- In the event of a failure in sending logs can be stored in the browser and sent to the server after the connection is restored or even the next time the user visits the site.
 - Supports Bearer authentication scheme.
 - Provides string substitutions like console and node.js (%s, %d, %j, %o).
-- In the event of a failure in sending logs can be stored in the browser and sent to the server after the connection is restored or even the next time the user visits the site.
 
 ## Installation
 

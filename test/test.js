@@ -28,7 +28,7 @@ function StorageMock() {
 
 global.window = {
   XMLHttpRequest: sinon.useFakeXMLHttpRequest(),
-  localstorage: new StorageMock()
+  localStorage: StorageMock()
 };
 
 const plugin = require('../lib/loglevel-plugin-remote');
@@ -39,23 +39,23 @@ loglevel.setLevel('info');
 const spy = sinon.spy();
 
 describe('', () => {
-  beforeEach(() => {
-    try {
-      plugin.disable();
-      // eslint-disable-next-line no-empty
-    } catch (ignore) {}
-    try {
-      other.disable();
-      // eslint-disable-next-line no-empty
-    } catch (ignore) {}
-    try {
-      plugin.disable();
-      // eslint-disable-next-line no-empty
-    } catch (ignore) {}
-    spy.reset();
-  });
-
   describe('API', () => {
+    afterEach(() => {
+      try {
+        plugin.disable();
+        // eslint-disable-next-line no-empty
+      } catch (ignore) {}
+      try {
+        other.disable();
+        // eslint-disable-next-line no-empty
+      } catch (ignore) {}
+      try {
+        plugin.disable();
+        // eslint-disable-next-line no-empty
+      } catch (ignore) {}
+      spy.reset();
+    });
+
     it('Methods', () => {
       expect(plugin).to.have.property('apply').with.be.a('function');
       expect(plugin).to.have.property('disable').with.be.a('function');
@@ -104,51 +104,192 @@ describe('', () => {
     });
   });
 
-  describe('Remote', () => {
+  describe('Common', () => {
     it('All methods of the previous plugin should be called', () => {
       other.apply(loglevel, { method: spy });
-      plugin.apply(loglevel);
+      plugin.apply(loglevel, { persist: 'never', interval: 0 });
 
       loglevel.enableAll();
-      loglevel.trace();
-      loglevel.debug();
-      loglevel.info();
-      loglevel.warn();
-      loglevel.error();
+      loglevel.trace('trace');
+      loglevel.debug('debug');
+      loglevel.info('info');
+      loglevel.warn('warn');
+      loglevel.error('error');
       expect(spy.callCount).to.equal(5);
+
+      plugin.disable();
+      other.disable();
     });
   });
 });
 
 describe('Requests', () => {
+  let server;
+  const successful = [200, { 'Content-Type': 'text/plain', 'Content-Length': 2 }, 'OK'];
+  const fail = [404, {}, ''];
+
+  function requests() {
+    const result = [];
+    server.requests.forEach((request) => {
+      result.push(`${request.status}: ${request.requestBody.replace(/\n/g, '')}`);
+    });
+    return result;
+  }
+
+  function received() {
+    let result = [];
+    server.requests.forEach((request) => {
+      if (request.status === 200) {
+        result = result.concat(request.requestBody.split('\n'));
+      }
+    });
+    return result;
+  }
+
   beforeEach(() => {
-    try {
-      plugin.disable();
-      // eslint-disable-next-line no-empty
-    } catch (ignore) {}
-    try {
-      other.disable();
-      // eslint-disable-next-line no-empty
-    } catch (ignore) {}
-    try {
-      plugin.disable();
-      // eslint-disable-next-line no-empty
-    } catch (ignore) {}
-    spy.reset();
+    other.apply(loglevel);
+    server = sinon.fakeServer.create();
   });
 
-  it('Message should be sended', () => {
-    const xhr = sinon.useFakeXMLHttpRequest();
-    const requests = [];
+  afterEach(() => {
+    plugin.disable();
+    other.disable();
+  });
 
-    xhr.onCreate = (request) => {
-      requests.push(request);
+  it('The message must be received', () => {
+    plugin.apply(loglevel, { persist: 'never', interval: 0 });
+
+    loglevel.info('test');
+
+    server.respondWith(successful);
+    server.respond();
+
+    const expected = ['test'];
+
+    expect(expected).to.eql(received());
+  });
+
+  it('Test persist:never', () => {
+    plugin.apply(loglevel, { persist: 'never', capacity: 3, interval: 0 });
+
+    server.respondWith(fail);
+    loglevel.info('A');
+    server.respond();
+    loglevel.info('B');
+    server.respond();
+    loglevel.info('C');
+    server.respond();
+    loglevel.info('D');
+    server.respond();
+    server.respondWith(successful);
+    loglevel.info('E');
+    server.respond();
+    server.respond();
+
+    /*
+                         | sent | queue |                   | sent | queue |
+    ------------------------------------------------------------------------
+    info(A)              |      |     A |-> send(A)         |    A |       |
+    respond(A)-> fail    |    A |       |-> send(A)         |    A |       |
+    info(B)              |    A |     B |  !send (sending)  |--------------|
+    respond(A)-> fail    |    A |     B |-> send(A)         |    A |     B |
+    info(C)              |    A |    BC |  !send (sending)  |--------------|
+    respond(A)-> fail    |      |    BC |-> send(BC)        |   BC |       |
+    info(D)              |   BC |     D |  !send (sending)  |--------------|
+    respond(BC)-> fail   |      |    CD |-> send(CD)        |   CD |       |
+    info(E)              |   CD |     E |  !send (sending)  |--------------|
+    respond(CD)-> succ   |      |     E |-> send(E)         |    E |       |
+    respond(E)-> succ    |      |       |  !send (empty)    |--------------|
+    */
+
+    // const expected = ['404: A', '404: A', '404: A', '404: BC', '200: CD', '200: E'];
+    const expected = ['C', 'D', 'E'];
+
+    expect(expected).to.eql(received());
+  });
+
+  it('Test persist:never 2', () => {
+    plugin.apply(loglevel, { persist: 'never', capacity: 3, interval: 0 });
+
+    server.respondWith(successful);
+    loglevel.info('A');
+    loglevel.info('B');
+    loglevel.info('C');
+    loglevel.info('D');
+    loglevel.info('E');
+    loglevel.info('F');
+    server.respond();
+    server.respond();
+
+    /*
+                         | sent | queue |                   | sent | queue |
+    ------------------------------------------------------------------------
+    info(A)              |      |     A |-> send(A)         |    A |       |
+    info(B)              |    A |     B |  !send (sending)  |--------------|
+    info(C)              |    A |    BC |  !send (sending)  |--------------|
+    info(D)              |    A |   BCD |  !send (sending)  |--------------|
+    info(E)              |    A |   CDE |  !send (sending)  |--------------|
+    info(F)              |    A |   DEF |  !send (sending)  |--------------|
+    respond(A)->(succ)   |      |   DEF |-> send(DEF)       |  DEF |       |
+    respond(DEF)->(succ) |      |       |  !send (empty)    |--------------|
+    */
+    const expected = ['200: A', '200: DEF'];
+
+    expect(expected).to.eql(requests());
+  });
+
+  /*
+  it('Test persist:always', () => {
+    plugin.apply(loglevel, { persist: 'always', capacity: 3, interval: 0 });
+
+    const emptyMessage = {
+      message: '',
+      level: 'info',
+      logger: '',
+      timestamp: new Date().toISOString(),
+      stacktrace: ''
     };
 
-    other.apply(loglevel);
-    plugin.apply(loglevel);
-    loglevel.info('test error');
+    const emptyLength = JSON.stringify(emptyMessage).length;
 
-    expect(requests[0].requestBody).to.equal('test error');
+    const padding = Array(Math.floor(1024 * 0.99) - emptyLength).join('A');
+
+    const full = {
+      message: `0${padding}`,
+      level: 'info',
+      logger: '',
+      timestamp: new Date().toISOString(),
+      stacktrace: ''
+    };
+
+    console.log(JSON.stringify(full).length);
+
+    const sent = ['0', '1', '2', '3', '4'];
+
+    server.respondWith(fail);
+    sent.forEach((message, index) => {
+      if (index === 4) {
+        server.respondWith(successful);
+      }
+      loglevel.info(message + padding);
+      server.respond();
+    });
+    server.respond();
+
+    const expected = ['2', '3', '4'];
+
+    let received = [];
+
+    server.requests.forEach((request) => {
+      // received.push(`${request.status}: ${request.requestBody.split('\n')}`);
+      if (request.status === 200) {
+        // received = received.concat(request.requestBody.split('\n'));
+        received = received.concat(request.requestBody.split('\n').map(message => message[0]));
+      }
+    });
+
+    console.log(received);
+    expect(expected).to.eql(received);
   });
+  */
 });
