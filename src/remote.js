@@ -152,16 +152,13 @@ function Memory(capacity, never) {
       queue = sent.concat(queue);
       this.confirm();
     }
-    /*
-    if (queue.length + sent.length >= capacity) {
-      this.confirm();
-    }
-    */
+    // if (queue.length + sent.length >= capacity) this.confirm();
   };
 }
 
 function Storage(capacity) {
   const local = window ? window.localStorage : undefined;
+
   const empty = {
     length: () => 0,
     confirm: () => {},
@@ -207,19 +204,23 @@ function Storage(capacity) {
   let queue = [];
   let sent = [];
 
-  const persist = () => {
+  const persist = (array) => {
+    array = array || queue;
+    const key = array === queue ? queueKey : sentKey;
+
     for (;;) {
-      const json = JSON.stringify(queue);
+      const json = `[${array.join(',')}]`;
+
       // console.log('json', json.length);
       // console.log('capacity', capacity * 512);
       if (json.length < capacity * 512) {
         try {
-          set(queueKey, json);
+          set(key, json);
           break;
           // eslint-disable-next-line no-empty
         } catch (quota) {}
       }
-      queue.shift();
+      array.shift();
     }
   };
 
@@ -232,6 +233,10 @@ function Storage(capacity) {
   const queueJSON = get(queueKey);
   if (queueJSON) {
     queue = queue.concat(JSON.parse(queueJSON));
+  }
+
+  if (queue.length && typeof queue[0] !== 'string') {
+    queue = queue.map(message => JSON.stringify(message));
   }
 
   persist();
@@ -249,9 +254,9 @@ function Storage(capacity) {
   this.send = () => {
     if (!sent.length) {
       sent = queue;
-      set(sentKey, JSON.stringify(sent));
       queue = [];
       persist();
+      persist(sent);
     }
     return sent;
   };
@@ -264,8 +269,8 @@ function Storage(capacity) {
 
   this.fail = () => {
     queue = sent.concat(queue);
-    persist();
     this.confirm();
+    persist();
   };
 
   this.unshift = (messages) => {
@@ -359,11 +364,8 @@ function apply(logger, options) {
       }
 
       const messages = sender.send();
-      if (options.json) {
-        sender.content = `{"messages":[${messages.join(',')}]}`;
-      } else {
-        sender.content = messages.join('\n');
-      }
+
+      sender.content = options.json ? `{"messages":[${messages.join(',')}]}` : messages.join('\n');
     }
 
     isSending = true;

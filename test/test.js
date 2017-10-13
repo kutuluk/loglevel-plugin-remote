@@ -4,7 +4,7 @@ const sinon = require('sinon');
 
 // https://stackoverflow.com/questions/11485420/how-to-mock-localstorage-in-javascript-unit-tests
 function StorageMock() {
-  const storage = {};
+  let storage = {};
 
   return {
     setItem(key, value) {
@@ -22,6 +22,9 @@ function StorageMock() {
     key(i) {
       const keys = Object.keys(storage);
       return keys[i] || null;
+    },
+    clear() {
+      storage = {};
     }
   };
 }
@@ -134,7 +137,7 @@ describe('Requests', () => {
     return result;
   }
 
-  function received() {
+  function receivedPlain() {
     let result = [];
     server.requests.forEach((request) => {
       if (request.status === 200) {
@@ -144,9 +147,20 @@ describe('Requests', () => {
     return result;
   }
 
+  function receivedJSON() {
+    let result = [];
+    server.requests.forEach((request) => {
+      if (request.status === 200) {
+        result = result.concat(JSON.parse(request.requestBody).messages);
+      }
+    });
+    return result;
+  }
+
   beforeEach(() => {
     other.apply(loglevel);
     server = sinon.fakeServer.create();
+    global.window.localStorage.clear();
   });
 
   afterEach(() => {
@@ -164,7 +178,7 @@ describe('Requests', () => {
 
     const expected = ['plain'];
 
-    expect(expected).to.eql(received());
+    expect(expected).to.eql(receivedPlain());
   });
 
   it('The json log must be received', () => {
@@ -179,20 +193,90 @@ describe('Requests', () => {
     server.respond();
 
     const expected = [
-      JSON.stringify({
-        messages: [
-          {
-            message: 'json',
-            level: 'info',
-            logger: '',
-            timestamp: time,
-            stacktrace: ''
-          }
-        ]
-      })
+      {
+        message: 'json',
+        level: 'info',
+        logger: '',
+        timestamp: time,
+        stacktrace: ''
+      }
     ];
 
-    expect(expected).to.eql(received());
+    expect(expected).to.eql(receivedJSON());
+  });
+
+  it('The old and new plain logs must be received', () => {
+    global.window.localStorage.setItem('loglevel-plugin-remote-sent', '["old-sent"]');
+    global.window.localStorage.setItem('loglevel-plugin-remote-queue', '["old-queue"]');
+
+    plugin.apply(loglevel, { persist: 'always', interval: 0 });
+
+    loglevel.info('new');
+
+    server.respondWith(successful);
+    server.respond();
+    server.respond();
+
+    const expected = ['old-sent', 'old-queue', 'new'];
+
+    expect(expected).to.eql(receivedPlain());
+  });
+
+  it('The old and new json logs must be received', () => {
+    const oldSentMessage = {
+      message: 'old-sent',
+      level: 'info',
+      logger: '',
+      timestamp: '',
+      stacktrace: ''
+    };
+    const oldSent = `[${JSON.stringify(oldSentMessage)}]`;
+
+    const oldQueueMessage1 = {
+      message: 'old-queue-1',
+      level: 'info',
+      logger: '',
+      timestamp: '',
+      stacktrace: ''
+    };
+    const oldQueueMessage2 = {
+      message: 'old-queue-2',
+      level: 'info',
+      logger: '',
+      timestamp: '',
+      stacktrace: ''
+    };
+    const oldQueueMessages = [JSON.stringify(oldQueueMessage1), JSON.stringify(oldQueueMessage2)];
+    const oldQueue = `[${oldQueueMessages.join(',')}]`;
+
+    global.window.localStorage.setItem('loglevel-plugin-remote-sent', oldSent);
+    global.window.localStorage.setItem('loglevel-plugin-remote-queue', oldQueue);
+
+    const time = new Date().toISOString();
+    const timestamp = () => time;
+
+    plugin.apply(loglevel, { json: true, persist: 'always', interval: 0, timestamp });
+
+    loglevel.info('new');
+
+    server.respondWith(successful);
+    server.respond();
+    server.respond();
+
+    const expected = [
+      oldSentMessage,
+      oldQueueMessage1,
+      oldQueueMessage2,
+      {
+        message: 'new',
+        level: 'info',
+        logger: '',
+        timestamp: time,
+        stacktrace: ''
+      }
+    ];
+
+    expect(expected).to.eql(receivedJSON());
   });
 
   it('Test persist:never', () => {
@@ -231,7 +315,7 @@ describe('Requests', () => {
     // const expected = ['404: A', '404: A', '404: A', '404: BC', '200: CD', '200: E'];
     const expected = ['C', 'D', 'E'];
 
-    expect(expected).to.eql(received());
+    expect(expected).to.eql(receivedPlain());
   });
 
   it('Test persist:never 2', () => {
