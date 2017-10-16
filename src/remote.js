@@ -156,7 +156,7 @@ function Memory(capacity, never) {
   };
 }
 
-function Storage(capacity) {
+function Storage(capacity, json) {
   const local = window ? window.localStorage : undefined;
 
   const empty = {
@@ -209,13 +209,13 @@ function Storage(capacity) {
     const key = array === queue ? queueKey : sentKey;
 
     for (;;) {
-      const json = `[${array.join(',')}]`;
+      const value = json ? `[${array.join(',')}]` : JSON.stringify(array);
 
       // console.log('json', json.length);
       // console.log('capacity', capacity * 512);
-      if (json.length < capacity * 512) {
+      if (value.length < capacity * 512) {
         try {
-          set(key, json);
+          set(key, value);
           break;
           // eslint-disable-next-line no-empty
         } catch (quota) {}
@@ -333,7 +333,7 @@ function apply(logger, options) {
     options.capacity = options.persist === 'never' ? defaultMemoryCapacity : defaultPersistCapacity;
   }
 
-  const storage = new Storage(options.capacity);
+  const storage = new Storage(options.capacity, options.json);
 
   if (!storage.push && options.persist !== 'never') {
     options.persist = 'never';
@@ -462,7 +462,6 @@ function apply(logger, options) {
         : `${message.message}${message.stacktrace ? `\n${message.stacktrace}` : ''}`;
 
       receiver.push([content]);
-
       send();
 
       rawMethod(...args);

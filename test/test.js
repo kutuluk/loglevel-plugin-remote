@@ -129,6 +129,15 @@ describe('Requests', () => {
   const successful = [200, { 'Content-Type': 'text/plain', 'Content-Length': 2 }, 'OK'];
   const fail = [404, {}, ''];
 
+  const quote = '"';
+  const acute = '`';
+  const apos = "'";
+  const bs = '\\';
+  const escape = `escape-${bs}n${bs}${quote}${bs}${acute}${bs}${apos}${bs}${bs}`;
+
+  const time = new Date().toISOString();
+  const timestamp = () => time;
+
   function requests() {
     const result = [];
     server.requests.forEach((request) => {
@@ -182,9 +191,6 @@ describe('Requests', () => {
   });
 
   it('The json log must be received', () => {
-    const time = new Date().toISOString();
-    const timestamp = () => time;
-
     plugin.apply(loglevel, { json: true, persist: 'never', interval: 0, timestamp });
 
     loglevel.info('json');
@@ -206,69 +212,86 @@ describe('Requests', () => {
   });
 
   it('The old and new plain logs must be received', () => {
-    global.window.localStorage.setItem('loglevel-plugin-remote-sent', '["old-sent"]');
-    global.window.localStorage.setItem('loglevel-plugin-remote-queue', '["old-queue"]');
+    plugin.apply(loglevel, { persist: 'always', interval: 0 });
+
+    server.respondWith(fail);
+
+    const old1 = `old-1-${escape}`;
+
+    loglevel.info(old1);
+    server.respond();
+    loglevel.info('old-2');
+    server.respond();
+
+    plugin.disable();
+    server = sinon.fakeServer.create();
 
     plugin.apply(loglevel, { persist: 'always', interval: 0 });
 
-    loglevel.info('new');
-
     server.respondWith(successful);
-    server.respond();
+
     server.respond();
 
-    const expected = ['old-sent', 'old-queue', 'new'];
+    loglevel.info('new-1');
+    server.respond();
+    loglevel.info('new-2');
+    server.respond();
+
+    const expected = [old1, 'old-2', 'new-1', 'new-2'];
 
     expect(expected).to.eql(receivedPlain());
   });
 
   it('The old and new json logs must be received', () => {
-    const oldSentMessage = {
-      message: 'old-sent',
-      level: 'info',
-      logger: '',
-      timestamp: '',
-      stacktrace: ''
-    };
-    const oldSent = `[${JSON.stringify(oldSentMessage)}]`;
+    plugin.apply(loglevel, { json: true, persist: 'always', interval: 0, timestamp });
 
-    const oldQueueMessage1 = {
-      message: 'old-queue-1',
-      level: 'info',
-      logger: '',
-      timestamp: '',
-      stacktrace: ''
-    };
-    const oldQueueMessage2 = {
-      message: 'old-queue-2',
-      level: 'info',
-      logger: '',
-      timestamp: '',
-      stacktrace: ''
-    };
-    const oldQueueMessages = [JSON.stringify(oldQueueMessage1), JSON.stringify(oldQueueMessage2)];
-    const oldQueue = `[${oldQueueMessages.join(',')}]`;
+    server.respondWith(fail);
 
-    global.window.localStorage.setItem('loglevel-plugin-remote-sent', oldSent);
-    global.window.localStorage.setItem('loglevel-plugin-remote-queue', oldQueue);
+    const old1 = `old-1-${escape}`;
 
-    const time = new Date().toISOString();
-    const timestamp = () => time;
+    loglevel.info(old1);
+    server.respond();
+    loglevel.info('old-2');
+    server.respond();
+
+    plugin.disable();
+    server = sinon.fakeServer.create();
 
     plugin.apply(loglevel, { json: true, persist: 'always', interval: 0, timestamp });
 
-    loglevel.info('new');
-
     server.respondWith(successful);
+
     server.respond();
+
+    loglevel.info('new-1');
+    server.respond();
+    loglevel.info('new-2');
     server.respond();
 
     const expected = [
-      oldSentMessage,
-      oldQueueMessage1,
-      oldQueueMessage2,
       {
-        message: 'new',
+        message: old1,
+        level: 'info',
+        logger: '',
+        timestamp: time,
+        stacktrace: ''
+      },
+      {
+        message: 'old-2',
+        level: 'info',
+        logger: '',
+        timestamp: time,
+        stacktrace: ''
+      },
+      {
+        message: 'new-1',
+        level: 'info',
+        logger: '',
+        timestamp: time,
+        stacktrace: ''
+      },
+      {
+        message: 'new-2',
         level: 'info',
         logger: '',
         timestamp: time,
