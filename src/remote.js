@@ -95,14 +95,16 @@ function format(array) {
   return result;
 }
 
-// Object.assign({}, ...sources) light ponyfill
+// Light deep Object.assign({}, ...sources)
 function assign() {
   const target = {};
   for (let s = 0; s < arguments.length; s += 1) {
     const source = Object(arguments[s]);
     for (const key in source) {
       if (Object.prototype.hasOwnProperty.call(source, key)) {
-        target[key] = source[key];
+        target[key] = typeof source[key] === 'object' && !Array.isArray(source[key])
+          ? assign(target[key], source[key])
+          : source[key];
       }
     }
   }
@@ -208,17 +210,27 @@ function Storage(capacity, json) {
     array = array || queue;
     const key = array === queue ? queueKey : sentKey;
 
+    // console.log(array === queue ? 'queue' : 'sent');
+
     for (;;) {
       const value = json ? `[${array.join(',')}]` : JSON.stringify(array);
 
-      // console.log('json', json.length);
-      // console.log('capacity', capacity * 512);
+      // console.log(value.length);
+      // console.log(capacity * 512);
+      // console.log('-');
+
       if (value.length < capacity * 512) {
         try {
+          // console.log('set:', value.length);
+          // console.log('--');
           set(key, value);
           break;
-          // eslint-disable-next-line no-empty
-        } catch (quota) {}
+        } catch (quota) {
+          if (!array.length) {
+            remove(key);
+            break;
+          }
+        }
       }
       array.shift();
     }
@@ -299,10 +311,14 @@ const defaults = {
   },
   persist: 'default',
   capacity: 0,
-  trace: ['trace', 'warn', 'error'],
-  depth: 0,
+  stacktrace: {
+    levels: ['trace', 'warn', 'error'],
+    depth: 3,
+    excess: 0,
+  },
   json: false,
   timestamp: () => new Date().toISOString(),
+  handle: 'remote',
 };
 
 const hasStacktraceSupport = !!getStacktrace();
@@ -326,7 +342,7 @@ function apply(logger, options) {
 
   options = assign(defaults, options);
 
-  const authorization = `Bearer ${options.token}`;
+  let authorization = `Bearer ${options.token}`;
   const contentType = options.json ? 'application/json' : 'text/plain';
 
   if (!options.capacity) {
@@ -350,7 +366,7 @@ function apply(logger, options) {
   let sender = receiver;
 
   function send() {
-    if (isSuspended || isSending) {
+    if (isSuspended || isSending || options.token === undefined) {
       return;
     }
 
@@ -433,11 +449,12 @@ function apply(logger, options) {
     xhr.send(sender.content);
   }
 
-  originalFactory = originalFactory || logger.methodFactory;
+  originalFactory = logger.methodFactory;
 
   pluginFactory = function methodFactory(methodName, logLevel, loggerName) {
     const rawMethod = originalFactory(methodName, logLevel, loggerName);
-    const needStack = hasStacktraceSupport && options.trace.some(level => level === methodName);
+    const needStack =
+      hasStacktraceSupport && options.stacktrace.levels.some(level => level === methodName);
 
     return (...args) => {
       const timestamp = options.timestamp();
@@ -445,8 +462,15 @@ function apply(logger, options) {
       let stacktrace = needStack ? getStacktrace() : '';
       if (stacktrace) {
         const lines = stacktrace.split('\n');
-        lines.splice(0, options.depth + 3);
-        stacktrace = lines.join('\n');
+        lines.splice(0, options.stacktrace.excess + 3);
+        const depth = options.stacktrace.depth;
+        if (depth && lines.length !== depth + 1) {
+          const shrink = lines.splice(0, depth);
+          stacktrace = shrink.join('\n');
+          if (lines.length) stacktrace += `\n    and ${lines.length} more`;
+        } else {
+          stacktrace = lines.join('\n');
+        }
       }
 
       const message = {
@@ -470,35 +494,40 @@ function apply(logger, options) {
 
   logger.methodFactory = pluginFactory;
   logger.setLevel(logger.getLevel());
+
+  if (!logger.plugins) logger.plugins = {};
+
+  logger.plugins[options.handle] = {
+    setToken: (token) => {
+      options.token = token;
+      authorization = `Bearer ${token}`;
+      send();
+    },
+    disable: () => {
+      if (pluginFactory !== loglevel.methodFactory) {
+        throw new Error("You can't disable a plugin after appling another plugin");
+      }
+
+      loglevel.methodFactory = originalFactory;
+      loglevel.setLevel(loglevel.getLevel());
+      loglevel = undefined;
+      delete logger.plugins[options.handle];
+    },
+  };
+
   return logger;
 }
 
-function disable() {
-  if (!loglevel) {
-    throw new Error("You can't disable a not appled plugin");
-  }
-
-  if (pluginFactory !== loglevel.methodFactory) {
-    throw new Error("You can't disable a plugin after appling another plugin");
-  }
-
-  loglevel.methodFactory = originalFactory;
-  loglevel.setLevel(loglevel.getLevel());
-  originalFactory = undefined;
-  loglevel = undefined;
-}
+const save = window ? window.remote : undefined;
 
 const remote = {
   apply,
-  disable,
-};
-
-const save = window ? window.remote : undefined;
-remote.noConflict = () => {
-  if (window && window.remote === remote) {
-    window.remote = save;
-  }
-  return remote;
+  noConflict: () => {
+    if (window && window.remote === remote) {
+      window.remote = save;
+    }
+    return remote;
+  },
 };
 
 export default remote;

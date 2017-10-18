@@ -1,6 +1,7 @@
 const expect = require('chai').expect;
 const loglevel = require('loglevel');
 const sinon = require('sinon');
+const prefix = require('loglevel-plugin-prefix');
 
 // https://stackoverflow.com/questions/11485420/how-to-mock-localstorage-in-javascript-unit-tests
 function StorageMock() {
@@ -44,7 +45,7 @@ const spy = sinon.spy();
 describe('API', () => {
   afterEach(() => {
     try {
-      plugin.disable();
+      loglevel.plugins.remote.disable();
       // eslint-disable-next-line no-empty
     } catch (ignore) {}
     try {
@@ -52,7 +53,7 @@ describe('API', () => {
       // eslint-disable-next-line no-empty
     } catch (ignore) {}
     try {
-      plugin.disable();
+      loglevel.plugins.remote.disable();
       // eslint-disable-next-line no-empty
     } catch (ignore) {}
     spy.reset();
@@ -60,8 +61,9 @@ describe('API', () => {
 
   it('Methods', () => {
     expect(plugin).to.have.property('apply').with.be.a('function');
-    expect(plugin).to.have.property('disable').with.be.a('function');
     expect(plugin).to.have.property('noConflict').with.be.a('function');
+    expect(plugin).to.not.have.property('disable');
+    expect(plugin).to.not.have.property('setToken');
   });
 
   it('Empty arguments', () => {
@@ -77,6 +79,19 @@ describe('API', () => {
 
   it('Right applying', () => {
     expect(() => plugin.apply(loglevel)).to.not.throw();
+    expect(loglevel.plugins.remote).to.have.property('setToken').with.be.a('function');
+    expect(loglevel.plugins.remote).to.have.property('disable').with.be.a('function');
+  });
+
+  it('Custom handle option', () => {
+    plugin.apply(loglevel, { handle: 'handle' });
+
+    expect(loglevel).to.have.property('plugins').with.be.a('object');
+    expect(loglevel.plugins).to.have.property('handle').with.be.a('object');
+    expect(loglevel.plugins.handle).to.have.property('disable').with.be.a('function');
+    expect(loglevel.plugins.handle).to.have.property('setToken').with.be.a('function');
+
+    loglevel.plugins.handle.disable();
   });
 
   it('Reapplying should throw an exception', () => {
@@ -88,18 +103,15 @@ describe('API', () => {
   it('Right disabling', () => {
     plugin.apply(loglevel);
 
-    expect(plugin.disable).to.not.throw();
-  });
-
-  it('Disabling a not appled plugin should throw an exception', () => {
-    expect(plugin.disable).to.throw(Error, "You can't disable a not appled plugin");
+    expect(loglevel.plugins.remote.disable).to.not.throw();
+    expect(loglevel.plugins).to.not.have.property(plugin.name);
   });
 
   it('Disabling after using another plugin should throw an exception', () => {
     plugin.apply(loglevel);
     other.apply(loglevel);
 
-    expect(plugin.disable).to.throw(
+    expect(loglevel.plugins.remote.disable).to.throw(
       Error,
       "You can't disable a plugin after appling another plugin"
     );
@@ -119,7 +131,7 @@ describe('Common', () => {
     loglevel.error('error');
     expect(spy.callCount).to.equal(5);
 
-    plugin.disable();
+    loglevel.plugins.remote.disable();
     other.disable();
   });
 });
@@ -173,7 +185,7 @@ describe('Requests', () => {
   });
 
   afterEach(() => {
-    plugin.disable();
+    loglevel.plugins.remote.disable();
     other.disable();
   });
 
@@ -211,6 +223,60 @@ describe('Requests', () => {
     expect(expected).to.eql(receivedJSON());
   });
 
+  it('Stacktrace', () => {
+    plugin.apply(loglevel, { persist: 'never', interval: 0, stacktrace: { depth: 4, excess: 1 } });
+    prefix.apply(loglevel);
+
+    function fn3() {
+      loglevel.trace('Stacktrace');
+    }
+
+    function fn2() {
+      fn3();
+    }
+
+    function fn1() {
+      fn2();
+    }
+
+    fn1();
+
+    server.respondWith(successful);
+    server.respond();
+
+    expect(receivedPlain()[0]).to.include('Stacktrace');
+    expect(receivedPlain()[1]).to.include('fn3');
+    expect(receivedPlain()[2]).to.include('fn2');
+    expect(receivedPlain()[3]).to.include('fn1');
+    expect(receivedPlain()[4]).to.include('Context.it');
+    expect(receivedPlain()[5]).to.include('more');
+
+    prefix.disable();
+  });
+
+  it('Undefined token', () => {
+    plugin.apply(loglevel, { persist: 'never', interval: 0, token: undefined });
+
+    server.respondWith(successful);
+
+    loglevel.info('A');
+    server.respond();
+    loglevel.info('B');
+    server.respond();
+
+    const expectedBefore = [];
+
+    expect(expectedBefore).to.eql(receivedPlain());
+
+    loglevel.plugins.remote.setToken('token');
+
+    server.respond();
+
+    const expectedAfter = ['A', 'B'];
+
+    expect(expectedAfter).to.eql(receivedPlain());
+  });
+
   it('The old and new plain logs must be received', () => {
     plugin.apply(loglevel, { persist: 'always', interval: 0 });
 
@@ -223,7 +289,7 @@ describe('Requests', () => {
     loglevel.info('old-2');
     server.respond();
 
-    plugin.disable();
+    loglevel.plugins.remote.disable();
     server = sinon.fakeServer.create();
 
     plugin.apply(loglevel, { persist: 'always', interval: 0 });
@@ -254,7 +320,7 @@ describe('Requests', () => {
     loglevel.info('old-2');
     server.respond();
 
-    plugin.disable();
+    loglevel.plugins.remote.disable();
     server = sinon.fakeServer.create();
 
     plugin.apply(loglevel, { json: true, persist: 'always', interval: 0, timestamp });
@@ -302,7 +368,7 @@ describe('Requests', () => {
     expect(expected).to.eql(receivedJSON());
   });
 
-  it('Test persist:never', () => {
+  it('Test persist:never -> down server', () => {
     plugin.apply(loglevel, { persist: 'never', capacity: 3, interval: 0 });
 
     server.respondWith(fail);
@@ -314,6 +380,7 @@ describe('Requests', () => {
     server.respond();
     loglevel.info('D');
     server.respond();
+
     server.respondWith(successful);
     loglevel.info('E');
     server.respond();
@@ -341,7 +408,7 @@ describe('Requests', () => {
     expect(expected).to.eql(receivedPlain());
   });
 
-  it('Test persist:never 2', () => {
+  it('Test persist:never -> owerflow', () => {
     plugin.apply(loglevel, { persist: 'never', capacity: 3, interval: 0 });
 
     server.respondWith(successful);
@@ -425,4 +492,68 @@ describe('Requests', () => {
     expect(expected).to.eql(received);
   });
   */
+
+  /*
+  it('Test persist:always -> down server', () => {
+    plugin.apply(loglevel, { persist: 'always', capacity: 3, interval: 0 });
+
+    const padding = Array(Math.floor(512 * 0.99)).join('%');
+
+    server.respondWith(fail);
+
+    const A = `A${padding}`;
+    const B = `B${padding}`;
+    const C = `C${padding}`;
+    const D = `D${padding}`;
+    const E = `E${padding}`;
+
+    console.log('A', A.length);
+
+    loglevel.info(A);
+    server.respond();
+    loglevel.info(B);
+    server.respond();
+    loglevel.info(C);
+    server.respond();
+    loglevel.info(D);
+    server.respond();
+
+    server.respondWith(successful);
+    loglevel.info(E);
+    server.respond();
+    server.respond();
+
+    const expected = [C, D, E];
+
+    expect(expected).to.eql(receivedPlain());
+  });
+*/
+
+  it('Test persist:always -> owerflow', () => {
+    plugin.apply(loglevel, { persist: 'always', capacity: 3, interval: 0 });
+
+    const padding = Array(Math.floor(512 * 0.9)).join('%');
+
+    const A = `A${padding}`;
+    const B = `B${padding}`;
+    const C = `C${padding}`;
+    const D = `D${padding}`;
+    const E = `E${padding}`;
+    const F = `F${padding}`;
+
+    server.respondWith(successful);
+
+    loglevel.info(A);
+    loglevel.info(B);
+    loglevel.info(C);
+    loglevel.info(D);
+    loglevel.info(E);
+    loglevel.info(F);
+    server.respond();
+    server.respond();
+
+    const expected = [A, D, E, F];
+
+    expect(expected).to.eql(receivedPlain());
+  });
 });
