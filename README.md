@@ -179,25 +179,43 @@ const customPlain = () => ({
 /*
 const customJSON = () => ({
   json: true,
-  formatter: (log) => {
-    log.counter = counter();
-    return log;
-  }
+  formatter: log => ({
+    message: log.message,
+    count: counter()
+  })
 });
 */
 
 remote.apply(log, { format: customPlain });
+// remote.apply(log, { format: customJSON });
 
 log.info('Message one');
 log.info('Message two');
 
 ```
 
-logs:
+customPlain:
 
 ```
 [1] Message one
 [2] Message two
+```
+
+customJSON:
+
+```json
+{
+    "logs": [
+        {
+            "message": "Message one",
+            "count": 1
+        },
+        {
+            "message": "Message two",
+            "count": 2
+        }
+    ]
+}
 ```
 
 #### ```setToken(token)```

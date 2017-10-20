@@ -99,6 +99,10 @@ describe('API', () => {
     expect(plugin.disable).to.throw(Error, "You can't disable a not appled plugin");
   });
 
+  it('setToken for a not appled plugin should throw an exception', () => {
+    expect(plugin.setToken).to.throw(Error, "You can't set token for a not appled plugin");
+  });
+
   it('Disabling after using another plugin should throw an exception', () => {
     plugin.apply(loglevel);
     other.apply(loglevel);

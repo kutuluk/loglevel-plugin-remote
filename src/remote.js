@@ -318,6 +318,10 @@ function json() {
   };
 }
 
+function setToken() {
+  throw new Error("You can't set token for a not appled plugin");
+}
+
 const save = window ? window.remote : undefined;
 
 const defaultMemoryCapacity = 500;
@@ -560,9 +564,9 @@ const remote = {
     loglevel.methodFactory = originalFactory;
     loglevel.setLevel(loglevel.getLevel());
     loglevel = undefined;
-    remote.setToken = () => {};
+    remote.setToken = setToken;
   },
-  setToken() {},
+  setToken,
 };
 
 export default remote;
