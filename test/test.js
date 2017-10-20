@@ -45,7 +45,7 @@ const spy = sinon.spy();
 describe('API', () => {
   afterEach(() => {
     try {
-      loglevel.plugins.remote.disable();
+      plugin.disable();
       // eslint-disable-next-line no-empty
     } catch (ignore) {}
     try {
@@ -53,7 +53,7 @@ describe('API', () => {
       // eslint-disable-next-line no-empty
     } catch (ignore) {}
     try {
-      loglevel.plugins.remote.disable();
+      plugin.disable();
       // eslint-disable-next-line no-empty
     } catch (ignore) {}
     spy.reset();
@@ -62,8 +62,10 @@ describe('API', () => {
   it('Methods', () => {
     expect(plugin).to.have.property('apply').with.be.a('function');
     expect(plugin).to.have.property('noConflict').with.be.a('function');
-    expect(plugin).to.not.have.property('disable');
-    expect(plugin).to.not.have.property('setToken');
+    expect(plugin).to.have.property('plain').with.be.a('function');
+    expect(plugin).to.have.property('json').with.be.a('function');
+    expect(plugin).to.have.property('disable').with.be.a('function');
+    expect(plugin).to.have.property('setToken').with.be.a('function');
   });
 
   it('Empty arguments', () => {
@@ -79,19 +81,6 @@ describe('API', () => {
 
   it('Right applying', () => {
     expect(() => plugin.apply(loglevel)).to.not.throw();
-    expect(loglevel.plugins.remote).to.have.property('setToken').with.be.a('function');
-    expect(loglevel.plugins.remote).to.have.property('disable').with.be.a('function');
-  });
-
-  it('Custom handle option', () => {
-    plugin.apply(loglevel, { handle: 'handle' });
-
-    expect(loglevel).to.have.property('plugins').with.be.a('object');
-    expect(loglevel.plugins).to.have.property('handle').with.be.a('object');
-    expect(loglevel.plugins.handle).to.have.property('disable').with.be.a('function');
-    expect(loglevel.plugins.handle).to.have.property('setToken').with.be.a('function');
-
-    loglevel.plugins.handle.disable();
   });
 
   it('Reapplying should throw an exception', () => {
@@ -103,15 +92,18 @@ describe('API', () => {
   it('Right disabling', () => {
     plugin.apply(loglevel);
 
-    expect(loglevel.plugins.remote.disable).to.not.throw();
-    expect(loglevel.plugins).to.not.have.property(plugin.name);
+    expect(plugin.disable).to.not.throw();
+  });
+
+  it('Disabling a not appled plugin should throw an exception', () => {
+    expect(plugin.disable).to.throw(Error, "You can't disable a not appled plugin");
   });
 
   it('Disabling after using another plugin should throw an exception', () => {
     plugin.apply(loglevel);
     other.apply(loglevel);
 
-    expect(loglevel.plugins.remote.disable).to.throw(
+    expect(plugin.disable).to.throw(
       Error,
       "You can't disable a plugin after appling another plugin"
     );
@@ -131,7 +123,7 @@ describe('Common', () => {
     loglevel.error('error');
     expect(spy.callCount).to.equal(5);
 
-    loglevel.plugins.remote.disable();
+    plugin.disable();
     other.disable();
   });
 });
@@ -149,6 +141,11 @@ describe('Requests', () => {
 
   const time = new Date().toISOString();
   const timestamp = () => time;
+
+  const simple = () => ({
+    json: false,
+    formatter: log => `${log.message}${log.stacktrace ? `\n${log.stacktrace}` : ''}`
+  });
 
   function requests() {
     const result = [];
@@ -172,7 +169,7 @@ describe('Requests', () => {
     let result = [];
     server.requests.forEach((request) => {
       if (request.status === 200) {
-        result = result.concat(JSON.parse(request.requestBody).messages);
+        result = result.concat(JSON.parse(request.requestBody).logs);
       }
     });
     return result;
@@ -185,12 +182,12 @@ describe('Requests', () => {
   });
 
   afterEach(() => {
-    loglevel.plugins.remote.disable();
+    plugin.disable();
     other.disable();
   });
 
   it('The plain log must be received', () => {
-    plugin.apply(loglevel, { persist: 'never', interval: 0 });
+    plugin.apply(loglevel, { format: simple, persist: 'never', interval: 0 });
 
     loglevel.info('plain');
 
@@ -203,7 +200,12 @@ describe('Requests', () => {
   });
 
   it('The json log must be received', () => {
-    plugin.apply(loglevel, { json: true, persist: 'never', interval: 0, timestamp });
+    plugin.apply(loglevel, {
+      format: plugin.json,
+      persist: 'never',
+      interval: 0,
+      timestamp
+    });
 
     loglevel.info('json');
 
@@ -223,8 +225,111 @@ describe('Requests', () => {
     expect(expected).to.eql(receivedJSON());
   });
 
+  it('The log from child logger must be received', () => {
+    plugin.apply(loglevel, { format: plugin.json, persist: 'never', interval: 0, timestamp });
+
+    loglevel.getLogger('child').info('child logger');
+
+    server.respondWith(successful);
+    server.respond();
+
+    const expected = [
+      {
+        message: 'child logger',
+        level: 'info',
+        logger: 'child',
+        timestamp: time,
+        stacktrace: ''
+      }
+    ];
+
+    expect(expected).to.eql(receivedJSON());
+  });
+
+  it('Custom plain', () => {
+    const getCounter = () => {
+      let count = 1;
+      // eslint-disable-next-line no-plusplus
+      return () => count++;
+    };
+    const counter = getCounter();
+
+    const custom = () => ({
+      json: false,
+      formatter: log => `[${counter()}] ${log.message}`
+    });
+
+    plugin.apply(loglevel, { format: custom, persist: 'never', interval: 0, timestamp });
+
+    server.respondWith(successful);
+
+    loglevel.info('Message one');
+    server.respond();
+    loglevel.info('Message two');
+    server.respond();
+
+    const expected = ['[1] Message one', '[2] Message two'];
+
+    expect(expected).to.eql(receivedPlain());
+  });
+
+  it('Custom JSON', () => {
+    const getCounter = () => {
+      let count = 1;
+      // eslint-disable-next-line no-plusplus
+      return () => count++;
+    };
+    const counter = getCounter();
+
+    const custom = () => ({
+      json: true,
+      formatter(log) {
+        return {
+          msg: log.message,
+          lvl: log.levelVal,
+          log: log.logger,
+          loc: 'home',
+          count: counter()
+        };
+      }
+    });
+
+    plugin.apply(loglevel, { format: custom, persist: 'never', interval: 0, timestamp });
+
+    server.respondWith(successful);
+
+    loglevel.info('Message one');
+    server.respond();
+    loglevel.info('Message two');
+    server.respond();
+
+    const expected = [
+      {
+        msg: 'Message one',
+        lvl: 2,
+        log: '',
+        loc: 'home',
+        count: 1
+      },
+      {
+        msg: 'Message two',
+        lvl: 2,
+        log: '',
+        loc: 'home',
+        count: 2
+      }
+    ];
+
+    expect(expected).to.eql(receivedJSON());
+  });
+
   it('Stacktrace', () => {
-    plugin.apply(loglevel, { persist: 'never', interval: 0, stacktrace: { depth: 4, excess: 1 } });
+    plugin.apply(loglevel, {
+      format: simple,
+      persist: 'never',
+      interval: 0,
+      stacktrace: { depth: 4, excess: 1 }
+    });
     prefix.apply(loglevel);
 
     function fn3() {
@@ -255,7 +360,7 @@ describe('Requests', () => {
   });
 
   it('Undefined token', () => {
-    plugin.apply(loglevel, { persist: 'never', interval: 0, token: undefined });
+    plugin.apply(loglevel, { format: simple, persist: 'never', interval: 0, token: undefined });
 
     server.respondWith(successful);
 
@@ -268,7 +373,7 @@ describe('Requests', () => {
 
     expect(expectedBefore).to.eql(receivedPlain());
 
-    loglevel.plugins.remote.setToken('token');
+    plugin.setToken('token');
 
     server.respond();
 
@@ -278,7 +383,7 @@ describe('Requests', () => {
   });
 
   it('The old and new plain logs must be received', () => {
-    plugin.apply(loglevel, { persist: 'always', interval: 0 });
+    plugin.apply(loglevel, { format: simple, persist: 'always', interval: 0 });
 
     server.respondWith(fail);
 
@@ -289,10 +394,10 @@ describe('Requests', () => {
     loglevel.info('old-2');
     server.respond();
 
-    loglevel.plugins.remote.disable();
+    plugin.disable();
     server = sinon.fakeServer.create();
 
-    plugin.apply(loglevel, { persist: 'always', interval: 0 });
+    plugin.apply(loglevel, { format: simple, persist: 'always', interval: 0 });
 
     server.respondWith(successful);
 
@@ -309,7 +414,7 @@ describe('Requests', () => {
   });
 
   it('The old and new json logs must be received', () => {
-    plugin.apply(loglevel, { json: true, persist: 'always', interval: 0, timestamp });
+    plugin.apply(loglevel, { format: plugin.json, persist: 'always', interval: 0, timestamp });
 
     server.respondWith(fail);
 
@@ -320,10 +425,10 @@ describe('Requests', () => {
     loglevel.info('old-2');
     server.respond();
 
-    loglevel.plugins.remote.disable();
+    plugin.disable();
     server = sinon.fakeServer.create();
 
-    plugin.apply(loglevel, { json: true, persist: 'always', interval: 0, timestamp });
+    plugin.apply(loglevel, { format: plugin.json, persist: 'always', interval: 0, timestamp });
 
     server.respondWith(successful);
 
@@ -369,7 +474,7 @@ describe('Requests', () => {
   });
 
   it('Test persist:never -> down server', () => {
-    plugin.apply(loglevel, { persist: 'never', capacity: 3, interval: 0 });
+    plugin.apply(loglevel, { format: simple, persist: 'never', capacity: 3, interval: 0 });
 
     server.respondWith(fail);
     loglevel.info('A');
@@ -409,7 +514,7 @@ describe('Requests', () => {
   });
 
   it('Test persist:never -> owerflow', () => {
-    plugin.apply(loglevel, { persist: 'never', capacity: 3, interval: 0 });
+    plugin.apply(loglevel, { format: simple, persist: 'never', capacity: 3, interval: 0 });
 
     server.respondWith(successful);
     loglevel.info('A');
@@ -530,7 +635,7 @@ describe('Requests', () => {
 */
 
   it('Test persist:always -> owerflow', () => {
-    plugin.apply(loglevel, { persist: 'always', capacity: 3, interval: 0 });
+    plugin.apply(loglevel, { format: simple, persist: 'always', capacity: 3, interval: 0 });
 
     const padding = Array(Math.floor(512 * 0.9)).join('%');
 

@@ -46,7 +46,7 @@ function getConstructorName(obj) {
   return '';
 }
 
-function format(array) {
+function interpolate(array) {
   let result = '';
   let index = 0;
 
@@ -67,11 +67,11 @@ function format(array) {
             a = tryStringify(arg);
             break;
           case 'o': {
-            let json = tryStringify(arg);
-            if (json[0] !== '{' && json[0] !== '[') {
-              json = `<${json}>`;
+            let obj = tryStringify(arg);
+            if (obj[0] !== '{' && obj[0] !== '[') {
+              obj = `<${obj}>`;
             }
-            a = getConstructorName(arg) + json;
+            a = getConstructorName(arg) + obj;
             break;
           }
         }
@@ -158,7 +158,7 @@ function Memory(capacity, never) {
   };
 }
 
-function Storage(capacity, json) {
+function Storage(capacity, isJson) {
   const local = window ? window.localStorage : undefined;
 
   const empty = {
@@ -213,7 +213,7 @@ function Storage(capacity, json) {
     // console.log(array === queue ? 'queue' : 'sent');
 
     for (;;) {
-      const value = json ? `[${array.join(',')}]` : JSON.stringify(array);
+      const value = isJson ? `[${array.join(',')}]` : JSON.stringify(array);
 
       // console.log(value.length);
       // console.log(capacity * 512);
@@ -293,6 +293,33 @@ function Storage(capacity, json) {
   };
 }
 
+const hasStacktraceSupport = !!getStacktrace();
+
+let loglevel;
+let originalFactory;
+let pluginFactory;
+
+function plain() {
+  return {
+    json: false,
+    formatter(log) {
+      return `[${log.timestamp}] ${log.logger ? `(${log.logger}) ` : ''}${log.level.toUpperCase()}: ${log.message}${log.stacktrace ? `\n${log.stacktrace}` : ''}`;
+    },
+  };
+}
+
+function json() {
+  return {
+    json: true,
+    formatter(log) {
+      delete log.levelVal;
+      return log;
+    },
+  };
+}
+
+const save = window ? window.remote : undefined;
+
 const defaultMemoryCapacity = 500;
 const defaultPersistCapacity = 50;
 const defaults = {
@@ -309,225 +336,233 @@ const defaults = {
     next += next * jitter * Math.random();
     return next;
   },
-  persist: 'default',
+  persist: 'never',
   capacity: 0,
   stacktrace: {
     levels: ['trace', 'warn', 'error'],
     depth: 3,
     excess: 0,
   },
-  json: false,
   timestamp: () => new Date().toISOString(),
-  handle: 'remote',
+  format: plain,
 };
 
-const hasStacktraceSupport = !!getStacktrace();
-
-let loglevel;
-let originalFactory;
-let pluginFactory;
-
-function apply(logger, options) {
-  if (!logger || !logger.getLogger) {
-    throw new TypeError('Argument is not a root loglevel object');
-  }
-
-  if (loglevel) {
-    throw new Error('You can assign a plugin only one time');
-  }
-
-  if (!window || !window.XMLHttpRequest) return logger;
-
-  loglevel = logger;
-
-  options = assign(defaults, options);
-
-  let authorization = `Bearer ${options.token}`;
-  const contentType = options.json ? 'application/json' : 'text/plain';
-
-  if (!options.capacity) {
-    options.capacity = options.persist === 'never' ? defaultMemoryCapacity : defaultPersistCapacity;
-  }
-
-  const storage = new Storage(options.capacity, options.json);
-
-  if (!storage.push && options.persist !== 'never') {
-    options.persist = 'never';
-    options.capacity = defaultMemoryCapacity;
-  }
-
-  const memory = new Memory(options.capacity, options.persist === 'never');
-
-  let isSending = false;
-  let isSuspended = false;
-
-  let interval = options.interval;
-  let receiver = options.persist === 'always' ? storage : memory;
-  let sender = receiver;
-
-  function send() {
-    if (isSuspended || isSending || options.token === undefined) {
-      return;
-    }
-
-    if (!sender.sent()) {
-      if (storage.length()) {
-        sender = storage;
-      } else if (memory.length()) {
-        sender = memory;
-      } else {
-        return;
-      }
-
-      const messages = sender.send();
-
-      sender.content = options.json ? `{"messages":[${messages.join(',')}]}` : messages.join('\n');
-    }
-
-    isSending = true;
-
-    const xhr = new window.XMLHttpRequest();
-    xhr.open('POST', options.url, true);
-    xhr.setRequestHeader('Content-Type', contentType);
-    if (options.token) {
-      xhr.setRequestHeader('Authorization', authorization);
-    }
-
-    function suspend(successful) {
-      const pause = interval;
-
-      if (!successful) {
-        interval = options.backoff(interval);
-        sender.fail();
-        if (options.persist !== 'never' && receiver !== storage) {
-          storage.push(memory.send());
-          memory.confirm();
-          storage.push(memory.send());
-          memory.confirm();
-          receiver = storage;
-        }
-      }
-
-      if (pause) {
-        isSuspended = true;
-        setTimeout(() => {
-          isSuspended = false;
-          send();
-        }, pause);
-      } else send();
-    }
-
-    let timeout;
-    if (options.timeout) {
-      timeout = setTimeout(() => {
-        isSending = false;
-        xhr.abort();
-        suspend();
-      }, options.timeout);
-    }
-
-    xhr.onreadystatechange = () => {
-      if (xhr.readyState !== 4) {
-        return;
-      }
-
-      isSending = false;
-      clearTimeout(timeout);
-
-      if (xhr.status === 200) {
-        interval = options.interval;
-        sender.confirm();
-        if (options.persist !== 'always') {
-          receiver = memory;
-        }
-        suspend(true);
-      } else {
-        suspend();
-      }
-    };
-
-    xhr.send(sender.content);
-  }
-
-  originalFactory = logger.methodFactory;
-
-  pluginFactory = function methodFactory(methodName, logLevel, loggerName) {
-    const rawMethod = originalFactory(methodName, logLevel, loggerName);
-    const needStack =
-      hasStacktraceSupport && options.stacktrace.levels.some(level => level === methodName);
-
-    return (...args) => {
-      const timestamp = options.timestamp();
-
-      let stacktrace = needStack ? getStacktrace() : '';
-      if (stacktrace) {
-        const lines = stacktrace.split('\n');
-        lines.splice(0, options.stacktrace.excess + 3);
-        const depth = options.stacktrace.depth;
-        if (depth && lines.length !== depth + 1) {
-          const shrink = lines.splice(0, depth);
-          stacktrace = shrink.join('\n');
-          if (lines.length) stacktrace += `\n    and ${lines.length} more`;
-        } else {
-          stacktrace = lines.join('\n');
-        }
-      }
-
-      const message = {
-        message: format(args),
-        level: methodName,
-        logger: loggerName || '',
-        timestamp,
-        stacktrace,
-      };
-
-      const content = options.json
-        ? JSON.stringify(message)
-        : `${message.message}${message.stacktrace ? `\n${message.stacktrace}` : ''}`;
-
-      receiver.push([content]);
-      send();
-
-      rawMethod(...args);
-    };
-  };
-
-  logger.methodFactory = pluginFactory;
-  logger.setLevel(logger.getLevel());
-
-  if (!logger.plugins) logger.plugins = {};
-
-  logger.plugins[options.handle] = {
-    setToken: (token) => {
-      options.token = token;
-      authorization = `Bearer ${token}`;
-      send();
-    },
-    disable: () => {
-      if (pluginFactory !== loglevel.methodFactory) {
-        throw new Error("You can't disable a plugin after appling another plugin");
-      }
-
-      loglevel.methodFactory = originalFactory;
-      loglevel.setLevel(loglevel.getLevel());
-      loglevel = undefined;
-      delete logger.plugins[options.handle];
-    },
-  };
-
-  return logger;
-}
-
-const save = window ? window.remote : undefined;
-
 const remote = {
-  apply,
-  noConflict: () => {
+  noConflict() {
     if (window && window.remote === remote) {
       window.remote = save;
     }
     return remote;
   },
+  plain,
+  json,
+  apply(logger, options) {
+    if (!logger || !logger.getLogger) {
+      throw new TypeError('Argument is not a root loglevel object');
+    }
+
+    if (loglevel) {
+      throw new Error('You can assign a plugin only one time');
+    }
+
+    if (!window || !window.XMLHttpRequest) return logger;
+
+    loglevel = logger;
+
+    const config = assign(defaults, options);
+    const format = config.format();
+
+    let authorization = `Bearer ${config.token}`;
+    const contentType = format.json ? 'application/json' : 'text/plain';
+
+    if (!config.capacity) {
+      config.capacity = config.persist === 'never' ? defaultMemoryCapacity : defaultPersistCapacity;
+    }
+
+    const storage = new Storage(config.capacity, format.json);
+
+    if (!storage.push && config.persist !== 'never') {
+      config.persist = 'never';
+      config.capacity = defaultMemoryCapacity;
+    }
+
+    const memory = new Memory(config.capacity, config.persist === 'never');
+
+    let isSending = false;
+    let isSuspended = false;
+
+    let interval = config.interval;
+    let receiver = config.persist === 'always' ? storage : memory;
+    let sender = receiver;
+
+    function send() {
+      if (isSuspended || isSending || config.token === undefined) {
+        return;
+      }
+
+      if (!sender.sent()) {
+        if (storage.length()) {
+          sender = storage;
+        } else if (memory.length()) {
+          sender = memory;
+        } else {
+          return;
+        }
+
+        const logs = sender.send();
+
+        sender.content = format.json ? `{"logs":[${logs.join(',')}]}` : logs.join('\n');
+      }
+
+      isSending = true;
+
+      const xhr = new window.XMLHttpRequest();
+      xhr.open('POST', config.url, true);
+      xhr.setRequestHeader('Content-Type', contentType);
+      if (config.token) {
+        xhr.setRequestHeader('Authorization', authorization);
+      }
+
+      function suspend(successful) {
+        const pause = interval;
+
+        if (!successful) {
+          interval = config.backoff(interval);
+          sender.fail();
+          if (config.persist !== 'never' && receiver !== storage) {
+            storage.push(memory.send());
+            memory.confirm();
+            storage.push(memory.send());
+            memory.confirm();
+            receiver = storage;
+          }
+        }
+
+        if (pause) {
+          isSuspended = true;
+          setTimeout(() => {
+            isSuspended = false;
+            send();
+          }, pause);
+        } else send();
+      }
+
+      let timeout;
+      if (config.timeout) {
+        timeout = setTimeout(() => {
+          isSending = false;
+          xhr.abort();
+          suspend();
+        }, config.timeout);
+      }
+
+      xhr.onreadystatechange = () => {
+        if (xhr.readyState !== 4) {
+          return;
+        }
+
+        isSending = false;
+        clearTimeout(timeout);
+
+        if (xhr.status === 200) {
+          interval = config.interval;
+          sender.confirm();
+          if (config.persist !== 'always') {
+            receiver = memory;
+          }
+          suspend(true);
+        } else {
+          if (xhr.status === 401) {
+            config.token = undefined;
+            loglevel.getLogger('logger').error('Authorization Failed');
+          }
+          suspend();
+        }
+      };
+
+      xhr.send(sender.content);
+    }
+
+    originalFactory = logger.methodFactory;
+
+    pluginFactory = function remoteMethodFactory(methodName, logLevel, loggerName) {
+      const rawMethod = originalFactory(methodName, logLevel, loggerName);
+      const needStack =
+        hasStacktraceSupport && config.stacktrace.levels.some(level => level === methodName);
+      const levelVal = loglevel.levels[methodName.toUpperCase()];
+
+      return (...args) => {
+        const timestamp = config.timestamp();
+
+        let stacktrace = needStack ? getStacktrace() : '';
+        if (stacktrace) {
+          const lines = stacktrace.split('\n');
+          lines.splice(0, config.stacktrace.excess + 3);
+          const depth = config.stacktrace.depth;
+          if (depth && lines.length !== depth + 1) {
+            const shrink = lines.splice(0, depth);
+            stacktrace = shrink.join('\n');
+            if (lines.length) stacktrace += `\n    and ${lines.length} more`;
+          } else {
+            stacktrace = lines.join('\n');
+          }
+        }
+
+        const log = {
+          message: interpolate(args),
+          level: methodName,
+          levelVal,
+          logger: loggerName || '',
+          timestamp,
+          stacktrace,
+        };
+
+        let content = '';
+        if (format.json) {
+          try {
+            content += JSON.stringify(format.formatter(log));
+          } catch (error) {
+            rawMethod(...args);
+            loglevel.getLogger('logger').error(error);
+            return;
+          }
+        } else {
+          content += format.formatter(log);
+        }
+
+        receiver.push([content]);
+        send();
+
+        rawMethod(...args);
+      };
+    };
+
+    logger.methodFactory = pluginFactory;
+    logger.setLevel(logger.getLevel());
+
+    remote.setToken = (token) => {
+      config.token = token;
+      authorization = `Bearer ${token}`;
+      send();
+    };
+
+    return logger;
+  },
+  disable() {
+    if (!loglevel) {
+      throw new Error("You can't disable a not appled plugin");
+    }
+
+    if (pluginFactory !== loglevel.methodFactory) {
+      throw new Error("You can't disable a plugin after appling another plugin");
+    }
+
+    loglevel.methodFactory = originalFactory;
+    loglevel.setLevel(loglevel.getLevel());
+    loglevel = undefined;
+    remote.setToken = () => {};
+  },
+  setToken() {},
 };
 
 export default remote;
