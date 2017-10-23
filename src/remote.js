@@ -1,5 +1,3 @@
-const signature = 'loglevel-plugin-remote';
-
 let CIRCULAR_ERROR_MESSAGE;
 
 // https://github.com/nodejs/node/blob/master/lib/util.js
@@ -119,16 +117,16 @@ function getStacktrace() {
   }
 }
 
-function Memory(capacity, never) {
+function Memory(capacity) {
   let queue = [];
   let sent = [];
 
   this.length = () => queue.length;
   this.sent = () => sent.length;
 
-  this.push = (messages) => {
-    queue.push(messages[0]);
-    if (never && queue.length > capacity) {
+  this.push = (message) => {
+    queue.push(message);
+    if (queue.length > capacity) {
       queue.shift();
     }
   };
@@ -158,141 +156,6 @@ function Memory(capacity, never) {
   };
 }
 
-function Storage(capacity, isJson) {
-  const local = window ? window.localStorage : undefined;
-
-  const empty = {
-    length: () => 0,
-    confirm: () => {},
-  };
-
-  if (!local) {
-    return empty;
-  }
-
-  let get;
-  let set;
-  let remove;
-
-  try {
-    get = local.getItem.bind(local);
-    set = local.setItem.bind(local);
-    remove = local.removeItem.bind(local);
-    const testKey = `${signature}-test`;
-    set(testKey, testKey);
-    remove(testKey);
-  } catch (notsupport) {
-    return empty;
-  }
-
-  /*
-  let buffer = '';
-  const quotaKey = `${signature}-quota`;
-  for (;;) {
-    try {
-      buffer += new Array(1024 * 1024).join('A'); // 2 mB (each JS character is 2 bytes)
-      set(quotaKey, buffer);
-    } catch (quota) {
-      this.QUOTA_EXCEEDED_ERR = quota.name;
-      remove(quotaKey);
-      break;
-    }
-  }
-  */
-
-  const queueKey = `${signature}-queue`;
-  const sentKey = `${signature}-sent`;
-
-  let queue = [];
-  let sent = [];
-
-  const persist = (array) => {
-    array = array || queue;
-    const key = array === queue ? queueKey : sentKey;
-
-    // console.log(array === queue ? 'queue' : 'sent');
-
-    for (;;) {
-      const value = isJson ? `[${array.join(',')}]` : JSON.stringify(array);
-
-      // console.log(value.length);
-      // console.log(capacity * 512);
-      // console.log('-');
-
-      if (value.length < capacity * 512) {
-        try {
-          // console.log('set:', value.length);
-          // console.log('--');
-          set(key, value);
-          break;
-        } catch (quota) {
-          if (!array.length) {
-            remove(key);
-            break;
-          }
-        }
-      }
-      array.shift();
-    }
-  };
-
-  const sentJSON = get(sentKey);
-  if (sentJSON) {
-    queue = JSON.parse(sentJSON);
-    remove(sentKey);
-  }
-
-  const queueJSON = get(queueKey);
-  if (queueJSON) {
-    queue = queue.concat(JSON.parse(queueJSON));
-  }
-
-  if (queue.length && typeof queue[0] !== 'string') {
-    queue = queue.map(message => JSON.stringify(message));
-  }
-
-  persist();
-
-  this.length = () => queue.length;
-  this.sent = () => queue.sent;
-
-  this.push = (messages) => {
-    if (messages.length) {
-      queue = queue.concat(messages);
-      persist();
-    }
-  };
-
-  this.send = () => {
-    if (!sent.length) {
-      sent = queue;
-      queue = [];
-      persist();
-      persist(sent);
-    }
-    return sent;
-  };
-
-  this.confirm = () => {
-    sent = [];
-    this.content = '';
-    remove(sentKey);
-  };
-
-  this.fail = () => {
-    queue = sent.concat(queue);
-    this.confirm();
-    persist();
-  };
-
-  this.unshift = (messages) => {
-    if (messages.length) {
-      queue = messages.concat(queue);
-      persist();
-    }
-  };
-}
-
 const hasStacktraceSupport = !!getStacktrace();
 
 let loglevel;
@@ -303,7 +166,7 @@ function plain() {
   return {
     json: false,
     formatter(log) {
-      return `[${log.timestamp}] ${log.logger ? `(${log.logger}) ` : ''}${log.level.toUpperCase()}: ${log.message}${log.stacktrace ? `\n${log.stacktrace}` : ''}`;
+      return `[${log.timestamp}] ${log.logger ? `(${log.logger}) ` : ''}${log.level.label.toUpperCase()}: ${log.message}${log.stacktrace ? `\n${log.stacktrace}` : ''}`;
     },
   };
 }
@@ -312,7 +175,7 @@ function json() {
   return {
     json: true,
     formatter(log) {
-      delete log.levelVal;
+      log.level = log.level.label;
       return log;
     },
   };
@@ -324,8 +187,7 @@ function setToken() {
 
 const save = window ? window.remote : undefined;
 
-const defaultMemoryCapacity = 500;
-const defaultPersistCapacity = 50;
+const defaultCapacity = 500;
 const defaults = {
   url: '/logger',
   token: '',
@@ -340,7 +202,6 @@ const defaults = {
     next += next * jitter * Math.random();
     return next;
   },
-  persist: 'never',
   capacity: 0,
   stacktrace: {
     levels: ['trace', 'warn', 'error'],
@@ -380,42 +241,28 @@ const remote = {
     const contentType = format.json ? 'application/json' : 'text/plain';
 
     if (!config.capacity) {
-      config.capacity = config.persist === 'never' ? defaultMemoryCapacity : defaultPersistCapacity;
+      config.capacity = defaultCapacity;
     }
-
-    const storage = new Storage(config.capacity, format.json);
-
-    if (!storage.push && config.persist !== 'never') {
-      config.persist = 'never';
-      config.capacity = defaultMemoryCapacity;
-    }
-
-    const memory = new Memory(config.capacity, config.persist === 'never');
 
     let isSending = false;
     let isSuspended = false;
 
     let interval = config.interval;
-    let receiver = config.persist === 'always' ? storage : memory;
-    let sender = receiver;
+    const queue = new Memory(config.capacity);
 
     function send() {
       if (isSuspended || isSending || config.token === undefined) {
         return;
       }
 
-      if (!sender.sent()) {
-        if (storage.length()) {
-          sender = storage;
-        } else if (memory.length()) {
-          sender = memory;
-        } else {
+      if (!queue.sent()) {
+        if (!queue.length()) {
           return;
         }
 
-        const logs = sender.send();
+        const logs = queue.send();
 
-        sender.content = format.json ? `{"logs":[${logs.join(',')}]}` : logs.join('\n');
+        queue.content = format.json ? `{"logs":[${logs.join(',')}]}` : logs.join('\n');
       }
 
       isSending = true;
@@ -432,14 +279,7 @@ const remote = {
 
         if (!successful) {
           interval = config.backoff(interval);
-          sender.fail();
-          if (config.persist !== 'never' && receiver !== storage) {
-            storage.push(memory.send());
-            memory.confirm();
-            storage.push(memory.send());
-            memory.confirm();
-            receiver = storage;
-          }
+          queue.fail();
         }
 
         if (pause) {
@@ -470,10 +310,7 @@ const remote = {
 
         if (xhr.status === 200) {
           interval = config.interval;
-          sender.confirm();
-          if (config.persist !== 'always') {
-            receiver = memory;
-          }
+          queue.confirm();
           suspend(true);
         } else {
           if (xhr.status === 401) {
@@ -484,7 +321,7 @@ const remote = {
         }
       };
 
-      xhr.send(sender.content);
+      xhr.send(queue.content);
     }
 
     originalFactory = logger.methodFactory;
@@ -514,8 +351,10 @@ const remote = {
 
         const log = {
           message: interpolate(args),
-          level: methodName,
-          levelVal,
+          level: {
+            label: methodName,
+            value: levelVal,
+          },
           logger: loggerName || '',
           timestamp,
           stacktrace,
@@ -534,7 +373,7 @@ const remote = {
           content += format.formatter(log);
         }
 
-        receiver.push([content]);
+        queue.push(content);
         send();
 
         rawMethod(...args);

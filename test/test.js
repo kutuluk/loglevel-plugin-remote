@@ -3,36 +3,8 @@ const loglevel = require('loglevel');
 const sinon = require('sinon');
 const prefix = require('loglevel-plugin-prefix');
 
-// https://stackoverflow.com/questions/11485420/how-to-mock-localstorage-in-javascript-unit-tests
-function StorageMock() {
-  let storage = {};
-
-  return {
-    setItem(key, value) {
-      storage[key] = value || '';
-    },
-    getItem(key) {
-      return key in storage ? storage[key] : null;
-    },
-    removeItem(key) {
-      delete storage[key];
-    },
-    get length() {
-      return Object.keys(storage).length;
-    },
-    key(i) {
-      const keys = Object.keys(storage);
-      return keys[i] || null;
-    },
-    clear() {
-      storage = {};
-    }
-  };
-}
-
 global.window = {
-  XMLHttpRequest: sinon.useFakeXMLHttpRequest(),
-  localStorage: StorageMock()
+  XMLHttpRequest: sinon.useFakeXMLHttpRequest()
 };
 
 const plugin = require('../lib/loglevel-plugin-remote');
@@ -182,7 +154,6 @@ describe('Requests', () => {
   beforeEach(() => {
     other.apply(loglevel);
     server = sinon.fakeServer.create();
-    global.window.localStorage.clear();
   });
 
   afterEach(() => {
@@ -193,12 +164,12 @@ describe('Requests', () => {
   it('The plain log must be received', () => {
     plugin.apply(loglevel, { format: simple, persist: 'never', interval: 0 });
 
-    loglevel.info('plain');
+    loglevel.info(`plain-${escape}`);
 
     server.respondWith(successful);
     server.respond();
 
-    const expected = ['plain'];
+    const expected = [`plain-${escape}`];
 
     expect(expected).to.eql(receivedPlain());
   });
@@ -211,14 +182,14 @@ describe('Requests', () => {
       timestamp
     });
 
-    loglevel.info('json');
+    loglevel.info(`json-${escape}`);
 
     server.respondWith(successful);
     server.respond();
 
     const expected = [
       {
-        message: 'json',
+        message: `json-${escape}`,
         level: 'info',
         logger: '',
         timestamp: time,
@@ -290,7 +261,7 @@ describe('Requests', () => {
       formatter(log) {
         return {
           msg: log.message,
-          lvl: log.levelVal,
+          lvl: log.level.value,
           log: log.logger,
           loc: 'home',
           count: counter()
@@ -386,6 +357,7 @@ describe('Requests', () => {
     expect(expectedAfter).to.eql(receivedPlain());
   });
 
+  /*
   it('The old and new plain logs must be received', () => {
     plugin.apply(loglevel, { format: simple, persist: 'always', interval: 0 });
 
@@ -416,7 +388,9 @@ describe('Requests', () => {
 
     expect(expected).to.eql(receivedPlain());
   });
+  */
 
+  /*
   it('The old and new json logs must be received', () => {
     plugin.apply(loglevel, { format: plugin.json, persist: 'always', interval: 0, timestamp });
 
@@ -476,6 +450,7 @@ describe('Requests', () => {
 
     expect(expected).to.eql(receivedJSON());
   });
+  */
 
   it('Test persist:never -> down server', () => {
     plugin.apply(loglevel, { format: simple, persist: 'never', capacity: 3, interval: 0 });
@@ -637,7 +612,7 @@ describe('Requests', () => {
     expect(expected).to.eql(receivedPlain());
   });
 */
-
+  /*
   it('Test persist:always -> owerflow', () => {
     plugin.apply(loglevel, { format: simple, persist: 'always', capacity: 3, interval: 0 });
 
@@ -665,4 +640,5 @@ describe('Requests', () => {
 
     expect(expected).to.eql(receivedPlain());
   });
+  */
 });
