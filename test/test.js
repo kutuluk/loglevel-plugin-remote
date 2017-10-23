@@ -118,10 +118,7 @@ describe('Requests', () => {
   const time = new Date().toISOString();
   const timestamp = () => time;
 
-  const simple = () => ({
-    json: false,
-    formatter: log => `${log.message}${log.stacktrace ? `\n${log.stacktrace}` : ''}`
-  });
+  const simple = log => `${log.message}${log.stacktrace ? `\n${log.stacktrace}` : ''}`;
 
   function requests() {
     const result = [];
@@ -229,10 +226,7 @@ describe('Requests', () => {
     };
     const counter = getCounter();
 
-    const custom = () => ({
-      json: false,
-      formatter: log => `[${counter()}] ${log.message}`
-    });
+    const custom = log => `[${counter()}] ${log.message}`;
 
     plugin.apply(loglevel, { format: custom, persist: 'never', interval: 0, timestamp });
 
@@ -256,17 +250,12 @@ describe('Requests', () => {
     };
     const counter = getCounter();
 
-    const custom = () => ({
-      json: true,
-      formatter(log) {
-        return {
-          msg: log.message,
-          lvl: log.level.value,
-          log: log.logger,
-          loc: 'home',
-          count: counter()
-        };
-      }
+    const custom = log => ({
+      msg: log.message,
+      lvl: log.level.value,
+      log: log.logger,
+      loc: 'home',
+      count: counter()
     });
 
     plugin.apply(loglevel, { format: custom, persist: 'never', interval: 0, timestamp });

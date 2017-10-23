@@ -162,23 +162,13 @@ let loglevel;
 let originalFactory;
 let pluginFactory;
 
-function plain() {
-  return {
-    json: false,
-    formatter(log) {
-      return `[${log.timestamp}] ${log.logger ? `(${log.logger}) ` : ''}${log.level.label.toUpperCase()}: ${log.message}${log.stacktrace ? `\n${log.stacktrace}` : ''}`;
-    },
-  };
+function plain(log) {
+  return `[${log.timestamp}] ${log.logger ? `(${log.logger}) ` : ''}${log.level.label.toUpperCase()}: ${log.message}${log.stacktrace ? `\n${log.stacktrace}` : ''}`;
 }
 
-function json() {
-  return {
-    json: true,
-    formatter(log) {
-      log.level = log.level.label;
-      return log;
-    },
-  };
+function json(log) {
+  log.level = log.level.label;
+  return log;
 }
 
 function setToken() {
@@ -235,10 +225,9 @@ const remote = {
     loglevel = logger;
 
     const config = assign(defaults, options);
-    const format = config.format();
 
-    let authorization = `Bearer ${config.token}`;
-    const contentType = format.json ? 'application/json' : 'text/plain';
+    let contentType;
+    let isJSON;
 
     if (!config.capacity) {
       config.capacity = defaultCapacity;
@@ -262,7 +251,7 @@ const remote = {
 
         const logs = queue.send();
 
-        queue.content = format.json ? `{"logs":[${logs.join(',')}]}` : logs.join('\n');
+        queue.content = isJSON ? `{"logs":[${logs.join(',')}]}` : logs.join('\n');
       }
 
       isSending = true;
@@ -271,7 +260,7 @@ const remote = {
       xhr.open('POST', config.url, true);
       xhr.setRequestHeader('Content-Type', contentType);
       if (config.token) {
-        xhr.setRequestHeader('Authorization', authorization);
+        xhr.setRequestHeader('Authorization', `Bearer ${config.token}`);
       }
 
       function suspend(successful) {
@@ -349,7 +338,7 @@ const remote = {
           }
         }
 
-        const log = {
+        const log = config.format({
           message: interpolate(args),
           level: {
             label: methodName,
@@ -358,19 +347,24 @@ const remote = {
           logger: loggerName || '',
           timestamp,
           stacktrace,
-        };
+        });
+
+        if (isJSON === undefined) {
+          isJSON = typeof log !== 'string';
+          contentType = isJSON ? 'application/json' : 'text/plain';
+        }
 
         let content = '';
-        if (format.json) {
+        if (isJSON) {
           try {
-            content += JSON.stringify(format.formatter(log));
+            content += JSON.stringify(log);
           } catch (error) {
             rawMethod(...args);
             loglevel.getLogger('logger').error(error);
             return;
           }
         } else {
-          content += format.formatter(log);
+          content += log;
         }
 
         queue.push(content);
@@ -385,7 +379,6 @@ const remote = {
 
     remote.setToken = (token) => {
       config.token = token;
-      authorization = `Bearer ${token}`;
       send();
     };
 
