@@ -89,7 +89,7 @@ describe('API', () => {
 describe('Common', () => {
   it('All methods of the previous plugin should be called', () => {
     other.apply(loglevel, { method: spy });
-    plugin.apply(loglevel, { persist: 'never', interval: 0 });
+    plugin.apply(loglevel, { interval: 0 });
 
     loglevel.enableAll();
     loglevel.trace('trace');
@@ -108,6 +108,7 @@ describe('Requests', () => {
   let server;
   const successful = [200, { 'Content-Type': 'text/plain', 'Content-Length': 2 }, 'OK'];
   const fail = [404, {}, ''];
+  const unauthorized = [401, {}, ''];
 
   const quote = '"';
   const acute = '`';
@@ -159,7 +160,7 @@ describe('Requests', () => {
   });
 
   it('The plain log must be received', () => {
-    plugin.apply(loglevel, { format: simple, persist: 'never', interval: 0 });
+    plugin.apply(loglevel, { format: simple, interval: 0 });
 
     loglevel.info(`plain-${escape}`);
 
@@ -174,7 +175,6 @@ describe('Requests', () => {
   it('The json log must be received', () => {
     plugin.apply(loglevel, {
       format: plugin.json,
-      persist: 'never',
       interval: 0,
       timestamp
     });
@@ -198,7 +198,7 @@ describe('Requests', () => {
   });
 
   it('The log from child logger must be received', () => {
-    plugin.apply(loglevel, { format: plugin.json, persist: 'never', interval: 0, timestamp });
+    plugin.apply(loglevel, { format: plugin.json, interval: 0, timestamp });
 
     loglevel.getLogger('child').info('child logger');
 
@@ -228,7 +228,7 @@ describe('Requests', () => {
 
     const custom = log => `[${counter()}] ${log.message}`;
 
-    plugin.apply(loglevel, { format: custom, persist: 'never', interval: 0, timestamp });
+    plugin.apply(loglevel, { format: custom, interval: 0, timestamp });
 
     server.respondWith(successful);
 
@@ -258,7 +258,7 @@ describe('Requests', () => {
       count: counter()
     });
 
-    plugin.apply(loglevel, { format: custom, persist: 'never', interval: 0, timestamp });
+    plugin.apply(loglevel, { format: custom, interval: 0, timestamp });
 
     server.respondWith(successful);
 
@@ -290,7 +290,6 @@ describe('Requests', () => {
   it('Stacktrace', () => {
     plugin.apply(loglevel, {
       format: simple,
-      persist: 'never',
       interval: 0,
       stacktrace: { depth: 4, excess: 1 }
     });
@@ -324,7 +323,7 @@ describe('Requests', () => {
   });
 
   it('Undefined token', () => {
-    plugin.apply(loglevel, { format: simple, persist: 'never', interval: 0, token: undefined });
+    plugin.apply(loglevel, { format: simple, interval: 0, token: undefined });
 
     server.respondWith(successful);
 
@@ -346,103 +345,26 @@ describe('Requests', () => {
     expect(expectedAfter).to.eql(receivedPlain());
   });
 
-  /*
-  it('The old and new plain logs must be received', () => {
-    plugin.apply(loglevel, { format: simple, persist: 'always', interval: 0 });
-
-    server.respondWith(fail);
-
-    const old1 = `old-1-${escape}`;
-
-    loglevel.info(old1);
-    server.respond();
-    loglevel.info('old-2');
-    server.respond();
-
-    plugin.disable();
-    server = sinon.fakeServer.create();
-
-    plugin.apply(loglevel, { format: simple, persist: 'always', interval: 0 });
-
-    server.respondWith(successful);
-
-    server.respond();
-
-    loglevel.info('new-1');
-    server.respond();
-    loglevel.info('new-2');
-    server.respond();
-
-    const expected = [old1, 'old-2', 'new-1', 'new-2'];
-
-    expect(expected).to.eql(receivedPlain());
-  });
-  */
-
-  /*
-  it('The old and new json logs must be received', () => {
-    plugin.apply(loglevel, { format: plugin.json, persist: 'always', interval: 0, timestamp });
-
-    server.respondWith(fail);
-
-    const old1 = `old-1-${escape}`;
-
-    loglevel.info(old1);
-    server.respond();
-    loglevel.info('old-2');
-    server.respond();
-
-    plugin.disable();
-    server = sinon.fakeServer.create();
-
-    plugin.apply(loglevel, { format: plugin.json, persist: 'always', interval: 0, timestamp });
-
-    server.respondWith(successful);
-
-    server.respond();
-
-    loglevel.info('new-1');
-    server.respond();
-    loglevel.info('new-2');
-    server.respond();
-
-    const expected = [
-      {
-        message: old1,
-        level: 'info',
-        logger: '',
-        timestamp: time,
-        stacktrace: ''
-      },
-      {
-        message: 'old-2',
-        level: 'info',
-        logger: '',
-        timestamp: time,
-        stacktrace: ''
-      },
-      {
-        message: 'new-1',
-        level: 'info',
-        logger: '',
-        timestamp: time,
-        stacktrace: ''
-      },
-      {
-        message: 'new-2',
-        level: 'info',
-        logger: '',
-        timestamp: time,
-        stacktrace: ''
+  it('onUnauthorized must be called', () => {
+    let auth = true;
+    plugin.apply(loglevel, {
+      format: simple,
+      interval: 0,
+      onUnauthorized: () => {
+        auth = false;
       }
-    ];
+    });
 
-    expect(expected).to.eql(receivedJSON());
+    server.respondWith(unauthorized);
+
+    loglevel.info('auth');
+    server.respond();
+
+    expect(auth).to.equal(false);
   });
-  */
 
   it('Test persist:never -> down server', () => {
-    plugin.apply(loglevel, { format: simple, persist: 'never', capacity: 3, interval: 0 });
+    plugin.apply(loglevel, { format: simple, capacity: 3, interval: 0 });
 
     server.respondWith(fail);
     loglevel.info('A');
@@ -482,7 +404,7 @@ describe('Requests', () => {
   });
 
   it('Test persist:never -> owerflow', () => {
-    plugin.apply(loglevel, { format: simple, persist: 'never', capacity: 3, interval: 0 });
+    plugin.apply(loglevel, { format: simple, capacity: 3, interval: 0 });
 
     server.respondWith(successful);
     loglevel.info('A');
@@ -510,124 +432,4 @@ describe('Requests', () => {
 
     expect(expected).to.eql(requests());
   });
-
-  /*
-  it('Test persist:always', () => {
-    plugin.apply(loglevel, { persist: 'always', capacity: 3, interval: 0 });
-
-    const emptyMessage = {
-      message: '',
-      level: 'info',
-      logger: '',
-      timestamp: new Date().toISOString(),
-      stacktrace: ''
-    };
-
-    const emptyLength = JSON.stringify(emptyMessage).length;
-
-    const padding = Array(Math.floor(1024 * 0.99) - emptyLength).join('A');
-
-    const full = {
-      message: `0${padding}`,
-      level: 'info',
-      logger: '',
-      timestamp: new Date().toISOString(),
-      stacktrace: ''
-    };
-
-    console.log(JSON.stringify(full).length);
-
-    const sent = ['0', '1', '2', '3', '4'];
-
-    server.respondWith(fail);
-    sent.forEach((message, index) => {
-      if (index === 4) {
-        server.respondWith(successful);
-      }
-      loglevel.info(message + padding);
-      server.respond();
-    });
-    server.respond();
-
-    const expected = ['2', '3', '4'];
-
-    let received = [];
-
-    server.requests.forEach((request) => {
-      // received.push(`${request.status}: ${request.requestBody.split('\n')}`);
-      if (request.status === 200) {
-        // received = received.concat(request.requestBody.split('\n'));
-        received = received.concat(request.requestBody.split('\n').map(message => message[0]));
-      }
-    });
-
-    console.log(received);
-    expect(expected).to.eql(received);
-  });
-  */
-
-  /*
-  it('Test persist:always -> down server', () => {
-    plugin.apply(loglevel, { persist: 'always', capacity: 3, interval: 0 });
-
-    const padding = Array(Math.floor(512 * 0.99)).join('%');
-
-    server.respondWith(fail);
-
-    const A = `A${padding}`;
-    const B = `B${padding}`;
-    const C = `C${padding}`;
-    const D = `D${padding}`;
-    const E = `E${padding}`;
-
-    console.log('A', A.length);
-
-    loglevel.info(A);
-    server.respond();
-    loglevel.info(B);
-    server.respond();
-    loglevel.info(C);
-    server.respond();
-    loglevel.info(D);
-    server.respond();
-
-    server.respondWith(successful);
-    loglevel.info(E);
-    server.respond();
-    server.respond();
-
-    const expected = [C, D, E];
-
-    expect(expected).to.eql(receivedPlain());
-  });
-*/
-  /*
-  it('Test persist:always -> owerflow', () => {
-    plugin.apply(loglevel, { format: simple, persist: 'always', capacity: 3, interval: 0 });
-
-    const padding = Array(Math.floor(512 * 0.9)).join('%');
-
-    const A = `A${padding}`;
-    const B = `B${padding}`;
-    const C = `C${padding}`;
-    const D = `D${padding}`;
-    const E = `E${padding}`;
-    const F = `F${padding}`;
-
-    server.respondWith(successful);
-
-    loglevel.info(A);
-    loglevel.info(B);
-    loglevel.info(C);
-    loglevel.info(D);
-    loglevel.info(E);
-    loglevel.info(F);
-    server.respond();
-    server.respond();
-
-    const expected = [A, D, E, F];
-
-    expect(expected).to.eql(receivedPlain());
-  });
-  */
 });

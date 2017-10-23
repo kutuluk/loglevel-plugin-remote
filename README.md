@@ -8,7 +8,6 @@ A [loglevel](https://github.com/pimterry/loglevel) plugin for sending  browser l
 
 - Sends logs asynchronously with a specified frequency using only one request at a time.
 - Slows the frequency of sending after a fail and restores after success.
-- In the event of a failure in sending logs can be stored in the browser and sent to the server after the connection is restored or even the next time the user visits the site.
 - Supports Bearer authentication scheme.
 - Provides string substitutions like console and node.js (%s, %d, %j, %o).
 
@@ -34,6 +33,7 @@ This method applies the plugin to the loglevel.
 const defaults = {
   url: '/logger',
   token: '',
+  onUnauthorized: () => {},
   timeout: 0,
   interval: 1000,
   backoff: (interval) => {
@@ -45,8 +45,7 @@ const defaults = {
     next += next * jitter * Math.random();
     return next;
   },
-  persist: 'onfail',
-  capacity: 50,
+  capacity: 500,
   stacktrace: {
     levels: ['trace', 'warn', 'error'],
     depth: 3,
@@ -59,19 +58,11 @@ const defaults = {
 
 * **url** (string) - a URL of the server logging API
 * **token** (string) - a token for Bearer authentication scheme (see [RFC 6750](https://tools.ietf.org/html/rfc6750)), e.g. [UUID](https://en.wikipedia.org/wiki/Universally_unique_identifier) or [JWT](https://jwt.io/). By default is `''`. If you set the value to `undefined`, the sending of logs will be suspended until the `setToken` method is called, but the logs will still accumulate in the queue.
+* **onUnauthorized** (function) - this function will be called after the sending of logs is suspended due to an authentication error. A token that has not been authenticated will be passed to the function.
 * **timeout** (number) - a timeout in milliseconds (see [XMLHttpRequest.timeout](https://developer.mozilla.org/docs/Web/API/XMLHttpRequest/timeout))
 * **interval** (number) - a time in milliseconds between sending messages. By default is 1000 (one second).
 * **backoff** (function) - a function used to increase the sending interval after each failed send. By default, it doubles the interval and adds 10% jitter. Having reached the value of 30 seconds, the interval increase stops. After successful sending, the interval will be reset to the initial value.
-* **persist** (string) - a string parameter that takes one of the following values: 'never', 'always', 'default'. This option defines the strategy for storing logs.
-  * `never` Logs are stored only in memory. Highest productivity. By default.
-  * `always` Each log before sending will be stored on the [persistent storage](https://developer.mozilla.org/en-US/docs/Web/API/Window/localStorage). Very low productivity, used only in extreme cases, when it is necessary to guarantee the safety of logs.
-  * `onfail` Logs will be stored on the persistent storage only if the sending fails and stops after recovery.
-
-* **capacity** (number)
-  * if **persist** is `never` - the size of the queue in which messages are accumulated between sending. By default is 500.
-  * if **persist** is not `never` - the size of the persistent storage in kilobytes. By default is 50.
-
-In both cases overflow will delete the oldest messages. It is forbidden to set the value to 0 - in this case the default value will be used.
+* **capacity** (number) - the size of the queue in which messages are accumulated between sending. By default is 500. Overflow will delete the oldest messages. It is forbidden to set the value to 0 - in this case the default value will be used.
 
 * **stacktrace** (object) - object for configuring a stacktrace with the following properties:
   * **levels** (array) - lots of levels for which to add the stack trace. By default is `trace`, `warn` and `error`.
@@ -80,31 +71,26 @@ In both cases overflow will delete the oldest messages. It is forbidden to set t
 
 * **timestamp** (function) - a function that returns a timestamp. By default, it returns the time in the ISO format (see [ISO 8601](https://en.wikipedia.org/wiki/ISO_8601))
 
-* **format** ( function ) - this option defines the logs format. This function should return an object with two fields:
-  * json ( boolean ) - when set to true, the logs will be sent in json format, in the forgive case, the logs will be sent as plain text.
-  * formatter ( function ) - this function will generate a log, obtaining as a single argument a log object that looks like this:
+* **format** ( function ) - this option defines the logs format. This function will generate a log, obtaining as a single argument a log object that looks like this:
 
 ```javascript
 const log = {
-    message: 'Text',
-    level: 'info',
-    levelVal: 2, // number value of the level
-    logger: 'child',
-    timestamp: '2017-05-29T12:53:46.000Z',
-    stacktrace: '',
+  message: 'Text',
+  level: {
+    label: 'info',
+    value: 2,
+  },
+  logger: 'child',
+  timestamp: '2017-05-29T12:53:46.000Z',
+  stacktrace: '',
 };
 ```
 
-The default value is `remote.plain`:
+When the function returns a string, the logs will be sent as plain text. The default value is `remote.plain`:
 
 ```javascript
-function plain() {
-  return {
-    json: false,
-    formatter(log) {
-      return `[${log.timestamp}] ${log.logger ? `(${log.logger}) ` : ''}${log.level.toUpperCase()}: ${log.message}${log.stacktrace ? `\n${log.stacktrace}` : ''}`;
-    },
-  };
+function plain(log) {
+  return `[${log.timestamp}] ${log.logger ? `(${log.logger}) ` : ''}${log.level.label.toUpperCase()}: ${log.message}${log.stacktrace ? `\n${log.stacktrace}` : ''}`;
 }
 ```
 
@@ -122,17 +108,12 @@ the logs look like this:
     at http://localhost/test.js:12:5
 ```
 
-You can use the preset value `remote.json`:
+When the function returns an object, the logs will be sent in json format. You can use the preset value `remote.json`:
 
 ```javascript
-function json() {
-  return {
-    json: true,
-    formatter(log) {
-      delete log.levelVal;
-      return log;
-    },
-  };
+function json(log) {
+  log.level = log.level.label;
+  return log;
 }
 ```
 
@@ -171,19 +152,13 @@ const getCounter = () => {
 };
 const counter = getCounter();
 
-const customPlain = () => ({
-  json: false,
-  formatter: log => `[${counter()}] ${log.message}`
-});
+const customPlain = log => `[${counter()}] ${log.message}`;
 
 /*
-const customJSON = () => ({
-  json: true,
-  formatter: log => ({
-    message: log.message,
-    count: counter()
-  })
-});
+const customJSON = log => ({
+  message: log.message,
+  count: counter(),
+})
 */
 
 remote.apply(log, { format: customPlain });

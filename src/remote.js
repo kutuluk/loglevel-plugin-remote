@@ -181,6 +181,7 @@ const defaultCapacity = 500;
 const defaults = {
   url: '/logger',
   token: '',
+  onUnauthorized: () => {},
   timeout: 0,
   interval: 1000,
   backoff: (interval) => {
@@ -303,8 +304,10 @@ const remote = {
           suspend(true);
         } else {
           if (xhr.status === 401) {
+            const token = config.token;
             config.token = undefined;
             loglevel.getLogger('logger').error('Authorization Failed');
+            config.onUnauthorized(token);
           }
           suspend();
         }
