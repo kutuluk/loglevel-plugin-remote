@@ -33,7 +33,7 @@ This method applies the plugin to the loglevel.
 const defaults = {
   url: '/logger',
   token: '',
-  onUnauthorized: () => {},
+  onUnauthorized: (failedToken) => {},
   timeout: 0,
   interval: 1000,
   backoff: (interval) => {
@@ -86,7 +86,7 @@ const log = {
 };
 ```
 
-When the function returns a string, the logs will be sent as plain text. The default value is `remote.plain`:
+When the function returns a string, the logs will be sent as plain text. The default value is function `remote.plain`:
 
 ```javascript
 function plain(log) {
@@ -108,7 +108,7 @@ the logs look like this:
     at http://localhost/test.js:12:5
 ```
 
-When the function returns an object, the logs will be sent in json format. You can use the preset value `remote.json`:
+When the function returns an object, the logs will be sent in json format. You can use the preset function `remote.json`:
 
 ```javascript
 function json(log) {
@@ -134,7 +134,7 @@ then the logs will look like this:
             "level": "error",
             "logger": "",
             "timestamp": "2017-05-29T12:53:46.001Z",
-            "stacktrace": "at http://localhost/test.js:12:5"
+            "stacktrace": "    at http://localhost/test.js:12:5"
         }
     ]
 }
@@ -156,7 +156,7 @@ const customPlain = log => `[${counter()}] ${log.message}`;
 
 /*
 const customJSON = log => ({
-  message: log.message,
+  msg: log.message,
   count: counter(),
 });
 */
@@ -164,6 +164,7 @@ const customJSON = log => ({
 remote.apply(log, { format: customPlain });
 // remote.apply(log, { format: customJSON });
 
+log.enableAll();
 log.info('Message one');
 log.info('Message two');
 
@@ -182,11 +183,11 @@ customJSON:
 {
     "logs": [
         {
-            "message": "Message one",
+            "msg": "Message one",
             "count": 1
         },
         {
-            "message": "Message two",
+            "msg": "Message two",
             "count": 2
         }
     ]
@@ -206,7 +207,7 @@ This method cancels the effect of the plugin.
 
 ```html
 <script src="https://unpkg.com/loglevel/dist/loglevel.min.js"></script>
-<script src="https://unpkg.com/loglevel-plugin-remote/dist/loglevel-plugin-remote.min.js"></script>
+<script src="https://unpkg.com/loglevel-plugin-remote@^0.6.1/dist/loglevel-plugin-remote.min.js"></script>
 
 <script>
   var logger = log.noConflict();
@@ -249,7 +250,7 @@ Code
 var log = require('loglevel');
 var remote = require('loglevel-plugin-remote');
 
-log.setLevel('trace');
+log.enableAll();
 
 remote.apply(log);
 
@@ -276,19 +277,19 @@ Output in a log server
 
 Code
 ```javascript
-log.info('String substitutions: %% %t %s', 'one', 'two');
-log.info('Number substitutions: %d %d %d %d', 16, 1e6, '16', '1e6');
+log.info('String interpolation: %% %t %s', 'one', 'two');
+log.info('Number interpolation: %d %d %d %d', 16, 1e6, '16', '1e6');
 ```
 
 Output in a log server
 ```
-[2017-05-29T12:53:46.000Z] INFO: String substitutions: % %t one two
-[2017-05-29T12:53:46.000Z] INFO: Number substitutions: 16 1000000 16 1000000
+[2017-05-29T12:53:46.000Z] INFO: String interpolation: % %t one two
+[2017-05-29T12:53:46.000Z] INFO: Number interpolation: 16 1000000 16 1000000
 ```
 
 Code
 ```javascript
-log.info('Object substitutions:');
+log.info('Object interpolation:');
 
 function Rectangle(width, height) {
   this.width = width;
@@ -318,7 +319,7 @@ log.info('array: %o', array);
 
 Output in a log server
 ```
-[2017-05-29T12:53:46.000Z] INFO: Object substitutions:
+[2017-05-29T12:53:46.000Z] INFO: Object interpolation:
 [2017-05-29T12:53:46.000Z] INFO: [object Object], NaN, Rectangle{"height":10,"width":10}, {"height":10,"width":10} [object Object]
 [2017-05-29T12:53:46.000Z] INFO: date: Date<"2017-06-04T13:16:01.455Z">
 [2017-05-29T12:53:46.000Z] INFO: error: Error{}

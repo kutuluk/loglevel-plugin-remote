@@ -1,7 +1,8 @@
-if (!window) {
+const win = window;
+
+if (!win) {
   throw new Error('Plugin for browser usage only');
 }
-const win = window;
 
 let CIRCULAR_ERROR_MESSAGE;
 
