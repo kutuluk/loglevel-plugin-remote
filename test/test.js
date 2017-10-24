@@ -1,18 +1,20 @@
 const expect = require('chai').expect;
 const loglevel = require('loglevel');
 const sinon = require('sinon');
-const prefix = require('loglevel-plugin-prefix');
 
 global.window = {
-  XMLHttpRequest: sinon.useFakeXMLHttpRequest()
+  XMLHttpRequest: sinon.useFakeXMLHttpRequest(),
+  setTimeout(fn) {
+    fn();
+  },
+  clearTimeout() {}
 };
 
 const plugin = require('../lib/loglevel-plugin-remote');
 const other = require('loglevel-plugin-mock');
+const prefix = require('loglevel-plugin-prefix');
 
 loglevel.setLevel('info');
-
-const spy = sinon.spy();
 
 describe('API', () => {
   afterEach(() => {
@@ -28,7 +30,6 @@ describe('API', () => {
       plugin.disable();
       // eslint-disable-next-line no-empty
     } catch (ignore) {}
-    spy.reset();
   });
 
   it('Methods', () => {
@@ -88,6 +89,8 @@ describe('API', () => {
 
 describe('Common', () => {
   it('All methods of the previous plugin should be called', () => {
+    const spy = sinon.spy();
+
     other.apply(loglevel, { method: spy });
     plugin.apply(loglevel, { interval: 0 });
 
@@ -101,6 +104,7 @@ describe('Common', () => {
 
     plugin.disable();
     other.disable();
+    spy.reset();
   });
 });
 
@@ -160,7 +164,7 @@ describe('Requests', () => {
   });
 
   it('The plain log must be received', () => {
-    plugin.apply(loglevel, { format: simple, interval: 0 });
+    plugin.apply(loglevel, { format: simple });
 
     loglevel.info(`plain-${escape}`);
 
@@ -175,7 +179,6 @@ describe('Requests', () => {
   it('The json log must be received', () => {
     plugin.apply(loglevel, {
       format: plugin.json,
-      interval: 0,
       timestamp
     });
 
@@ -198,7 +201,10 @@ describe('Requests', () => {
   });
 
   it('The log from child logger must be received', () => {
-    plugin.apply(loglevel, { format: plugin.json, interval: 0, timestamp });
+    plugin.apply(loglevel, {
+      format: plugin.json,
+      timestamp
+    });
 
     loglevel.getLogger('child').info('child logger');
 
@@ -228,7 +234,10 @@ describe('Requests', () => {
 
     const custom = log => `[${counter()}] ${log.message}`;
 
-    plugin.apply(loglevel, { format: custom, interval: 0, timestamp });
+    plugin.apply(loglevel, {
+      format: custom,
+      timestamp
+    });
 
     server.respondWith(successful);
 
@@ -258,7 +267,10 @@ describe('Requests', () => {
       count: counter()
     });
 
-    plugin.apply(loglevel, { format: custom, interval: 0, timestamp });
+    plugin.apply(loglevel, {
+      format: custom,
+      timestamp
+    });
 
     server.respondWith(successful);
 
@@ -290,7 +302,6 @@ describe('Requests', () => {
   it('Stacktrace', () => {
     plugin.apply(loglevel, {
       format: simple,
-      interval: 0,
       stacktrace: { depth: 4, excess: 1 }
     });
     prefix.apply(loglevel);
@@ -323,7 +334,10 @@ describe('Requests', () => {
   });
 
   it('Undefined token', () => {
-    plugin.apply(loglevel, { format: simple, interval: 0, token: undefined });
+    plugin.apply(loglevel, {
+      format: simple,
+      token: undefined
+    });
 
     server.respondWith(successful);
 
@@ -346,25 +360,30 @@ describe('Requests', () => {
   });
 
   it('onUnauthorized must be called', () => {
-    let auth = true;
+    const spy = sinon.spy();
+
     plugin.apply(loglevel, {
       format: simple,
-      interval: 0,
-      onUnauthorized: () => {
-        auth = false;
-      }
+      onUnauthorized: spy
     });
 
     server.respondWith(unauthorized);
 
     loglevel.info('auth');
     server.respond();
+    loglevel.info('auth');
+    server.respond();
 
-    expect(auth).to.equal(false);
+    expect(spy.callCount).to.equal(1);
+
+    spy.reset();
   });
 
-  it('Test persist:never -> down server', () => {
-    plugin.apply(loglevel, { format: simple, capacity: 3, interval: 0 });
+  it('Test down server', () => {
+    plugin.apply(loglevel, {
+      format: simple,
+      capacity: 3
+    });
 
     server.respondWith(fail);
     loglevel.info('A');
@@ -403,8 +422,11 @@ describe('Requests', () => {
     expect(expected).to.eql(receivedPlain());
   });
 
-  it('Test persist:never -> owerflow', () => {
-    plugin.apply(loglevel, { format: simple, capacity: 3, interval: 0 });
+  it('Test fast sending', () => {
+    plugin.apply(loglevel, {
+      format: simple,
+      capacity: 3
+    });
 
     server.respondWith(successful);
     loglevel.info('A');

@@ -1,3 +1,8 @@
+if (!window) {
+  throw new Error('Plugin for browser usage only');
+}
+const win = window;
+
 let CIRCULAR_ERROR_MESSAGE;
 
 // https://github.com/nodejs/node/blob/master/lib/util.js
@@ -117,7 +122,7 @@ function getStacktrace() {
   }
 }
 
-function Memory(capacity) {
+function Queue(capacity) {
   let queue = [];
   let sent = [];
 
@@ -163,7 +168,7 @@ let originalFactory;
 let pluginFactory;
 
 function plain(log) {
-  return `[${log.timestamp}] ${log.logger ? `(${log.logger}) ` : ''}${log.level.label.toUpperCase()}: ${log.message}${log.stacktrace ? `\n${log.stacktrace}` : ''}`;
+  return `[${log.timestamp}] ${log.level.label.toUpperCase()}${log.logger ? ` (${log.logger})` : ''}: ${log.message}${log.stacktrace ? `\n${log.stacktrace}` : ''}`;
 }
 
 function json(log) {
@@ -175,7 +180,7 @@ function setToken() {
   throw new Error("You can't set token for a not appled plugin");
 }
 
-const save = window ? window.remote : undefined;
+const save = win.remote;
 
 const defaultCapacity = 500;
 const defaults = {
@@ -205,8 +210,8 @@ const defaults = {
 
 const remote = {
   noConflict() {
-    if (window && window.remote === remote) {
-      window.remote = save;
+    if (win.remote === remote) {
+      win.remote = save;
     }
     return remote;
   },
@@ -221,7 +226,7 @@ const remote = {
       throw new Error('You can assign a plugin only one time');
     }
 
-    if (!window || !window.XMLHttpRequest) return logger;
+    if (!win.XMLHttpRequest) return logger;
 
     loglevel = logger;
 
@@ -238,7 +243,7 @@ const remote = {
     let isSuspended = false;
 
     let interval = config.interval;
-    const queue = new Memory(config.capacity);
+    const queue = new Queue(config.capacity);
 
     function send() {
       if (isSuspended || isSending || config.token === undefined) {
@@ -257,7 +262,7 @@ const remote = {
 
       isSending = true;
 
-      const xhr = new window.XMLHttpRequest();
+      const xhr = new win.XMLHttpRequest();
       xhr.open('POST', config.url, true);
       xhr.setRequestHeader('Content-Type', contentType);
       if (config.token) {
@@ -265,25 +270,21 @@ const remote = {
       }
 
       function suspend(successful) {
-        const pause = interval;
-
         if (!successful) {
-          interval = config.backoff(interval);
+          interval = config.backoff(interval || 1);
           queue.fail();
         }
 
-        if (pause) {
-          isSuspended = true;
-          setTimeout(() => {
-            isSuspended = false;
-            send();
-          }, pause);
-        } else send();
+        isSuspended = true;
+        win.setTimeout(() => {
+          isSuspended = false;
+          send();
+        }, interval);
       }
 
       let timeout;
       if (config.timeout) {
-        timeout = setTimeout(() => {
+        timeout = win.setTimeout(() => {
           isSending = false;
           xhr.abort();
           suspend();
@@ -296,7 +297,7 @@ const remote = {
         }
 
         isSending = false;
-        clearTimeout(timeout);
+        win.clearTimeout(timeout);
 
         if (xhr.status === 200) {
           interval = config.interval;
@@ -306,7 +307,6 @@ const remote = {
           if (xhr.status === 401) {
             const token = config.token;
             config.token = undefined;
-            loglevel.getLogger('logger').error('Authorization Failed');
             config.onUnauthorized(token);
           }
           suspend();

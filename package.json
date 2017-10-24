@@ -1,6 +1,6 @@
 {
   "name": "loglevel-plugin-remote",
-  "description": "Plugin for sending loglevel messages to a remote log server",
+  "description": "A loglevel plugin for sending browser logs to a server",
   "author": {
     "name": "kutuluk"
   },
@@ -21,7 +21,7 @@
     "url": "git@github.com:kutuluk/loglevel-plugin-remote.git"
   },
   "license": "MIT",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "main": "./lib/loglevel-plugin-remote",
   "babel": {
     "presets": [

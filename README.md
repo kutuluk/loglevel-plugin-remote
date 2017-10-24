@@ -9,7 +9,7 @@ A [loglevel](https://github.com/pimterry/loglevel) plugin for sending  browser l
 - Sends logs asynchronously with a specified frequency using only one request at a time.
 - Slows the frequency of sending after a fail and restores after success.
 - Supports Bearer authentication scheme.
-- Provides string substitutions like console and node.js (%s, %d, %j, %o).
+- Provides light string interpolation like console and node.js (%s, %d, %j, %o).
 
 ## Installation
 
@@ -71,7 +71,7 @@ const defaults = {
 
 * **timestamp** (function) - a function that returns a timestamp. By default, it returns the time in the ISO format (see [ISO 8601](https://en.wikipedia.org/wiki/ISO_8601))
 
-* **format** ( function ) - this option defines the logs format. This function will generate a log, obtaining as a single argument a log object that looks like this:
+* **format** (function) - this option defines the logs format. This function will generate a log, obtaining as a single argument a log object that looks like this:
 
 ```javascript
 const log = {
@@ -90,7 +90,7 @@ When the function returns a string, the logs will be sent as plain text. The def
 
 ```javascript
 function plain(log) {
-  return `[${log.timestamp}] ${log.logger ? `(${log.logger}) ` : ''}${log.level.label.toUpperCase()}: ${log.message}${log.stacktrace ? `\n${log.stacktrace}` : ''}`;
+  return `[${log.timestamp}] ${log.level.label.toUpperCase()}${log.logger ? ` (${log.logger})` : ''}: ${log.message}${log.stacktrace ? `\n${log.stacktrace}` : ''}`;
 }
 ```
 
@@ -103,7 +103,7 @@ log.error('Error message')
 the logs look like this:
 
 ```
-[2017-05-29T12:53:46.000Z] (child) INFO: Info message
+[2017-05-29T12:53:46.000Z] INFO (child): Info message
 [2017-05-29T12:53:46.001Z] ERROR: Error message
     at http://localhost/test.js:12:5
 ```
@@ -158,7 +158,7 @@ const customPlain = log => `[${counter()}] ${log.message}`;
 const customJSON = log => ({
   message: log.message,
   count: counter(),
-})
+});
 */
 
 remote.apply(log, { format: customPlain });
@@ -194,7 +194,8 @@ customJSON:
 ```
 
 #### ```setToken(token)```
-This method becomes available only after a successful call to the apply method and is used to assign a new authentication token. If you pass the value `undefined`, the sending of logs will be suspended until the next `setToken` call, but the logs will still accumulate in the queue.
+
+This method only has an effect after a successful call to the apply method and is used to assign a new authentication token. If you pass the value `undefined`, the sending of logs will be suspended until the next `setToken` call, but the logs will still accumulate in the queue.
 
 #### ```disable()```
 This method cancels the effect of the plugin.
@@ -262,14 +263,14 @@ log.error('error message');
 
 Output in a log server
 ```
-Log levels:
-trace message
+[2017-05-29T12:53:46.000Z] INFO: Log levels:
+[2017-05-29T12:53:46.000Z] TRACE: trace message
     at http://localhost/js/test.js:9:5
-debug message
-info message
-warn message
+[2017-05-29T12:53:46.000Z] DEBUG: debug message
+[2017-05-29T12:53:46.000Z] INFO: info message
+[2017-05-29T12:53:46.000Z] WARN: warn message
     at http://localhost/js/test.js:12:5
-error message
+[2017-05-29T12:53:46.000Z] ERROR: error message
     at http://localhost/js/test.js:13:5
 ```
 
@@ -281,8 +282,8 @@ log.info('Number substitutions: %d %d %d %d', 16, 1e6, '16', '1e6');
 
 Output in a log server
 ```
-String substitutions: % %t one two
-Number substitutions: 16 1000000 16 1000000
+[2017-05-29T12:53:46.000Z] INFO: String substitutions: % %t one two
+[2017-05-29T12:53:46.000Z] INFO: Number substitutions: 16 1000000 16 1000000
 ```
 
 Code
@@ -317,14 +318,14 @@ log.info('array: %o', array);
 
 Output in a log server
 ```
-Object substitutions:
-[object Object], NaN, Rectangle{"height":10,"width":10}, {"height":10,"width":10} [object Object]
-date: Date<"2017-06-04T13:16:01.455Z">
-error: Error{}
-string: String<"My string">
-number: Number<123>
-boolean: Boolean<true>
-array: Array[1,2,3]
+[2017-05-29T12:53:46.000Z] INFO: Object substitutions:
+[2017-05-29T12:53:46.000Z] INFO: [object Object], NaN, Rectangle{"height":10,"width":10}, {"height":10,"width":10} [object Object]
+[2017-05-29T12:53:46.000Z] INFO: date: Date<"2017-06-04T13:16:01.455Z">
+[2017-05-29T12:53:46.000Z] INFO: error: Error{}
+[2017-05-29T12:53:46.000Z] INFO: string: String<"My string">
+[2017-05-29T12:53:46.000Z] INFO: number: Number<123>
+[2017-05-29T12:53:46.000Z] INFO: boolean: Boolean<true>
+[2017-05-29T12:53:46.000Z] INFO: array: Array[1,2,3]
 ```
 
 ## Multiple plugins
@@ -333,12 +334,12 @@ Code
 ```javascript
 var log = require('loglevel');
 var remote = require('loglevel-plugin-remote');
-var prefix = require('loglevel-plugin-prefix');
+var mock = require('loglevel-plugin-mock');
 
-// To clean the loglevel-plugin-prefix line in the stack trace:
+// To clean the loglevel-plugin-mock line in the stack trace:
 // options = { stacktrace: { excess: 1 } }
 remote.apply(log, { stacktrace: { excess: 1 } });
-prefix.apply(log);
+mock.apply(log);
 
 var array = [1, 2, 3];
 log.warn('array: %o', array);
@@ -346,6 +347,6 @@ log.warn('array: %o', array);
 
 Output in a log server
 ```
-[12:53:46] WARN: array: Array[1,2,3]
+[2017-05-29T12:53:46.000Z] WARN: array: Array[1,2,3]
     at http://localhost/js/test.js:11:5
 ```
