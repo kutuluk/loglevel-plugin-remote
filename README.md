@@ -10,6 +10,8 @@ A [loglevel](https://github.com/pimterry/loglevel) plugin for sending  browser l
 - Slows the frequency of sending after a fail and restores after success.
 - Supports Bearer authentication scheme.
 - Provides light string interpolation like console and node.js (%s, %d, %j, %o).
+- Provides the ability to add any values ​​to the logs and specify a custom format.
+- Single file, no dependencies, weighs in at 2.3KB minified and gzipped.
 
 ## Installation
 
@@ -207,7 +209,7 @@ This method cancels the effect of the plugin.
 
 ```html
 <script src="https://unpkg.com/loglevel/dist/loglevel.min.js"></script>
-<script src="https://unpkg.com/loglevel-plugin-remote@^0.6.1/dist/loglevel-plugin-remote.min.js"></script>
+<script src="https://unpkg.com/loglevel-plugin-remote@^0.6/dist/loglevel-plugin-remote.min.js"></script>
 
 <script>
   var logger = log.noConflict();
