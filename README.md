@@ -74,9 +74,10 @@ const defaults = {
 
 * **timestamp** (function) - a function that returns a timestamp. By default, it returns the time in the ISO format (see [ISO 8601](https://en.wikipedia.org/wiki/ISO_8601))
 
+* **customHeaders** (object) - this is to support custom headers passed down to the post request. for example { 'my-header': 'myHeaderValue'}
+
 * **format** (function) - this option defines the logs format. This function will generate a log, obtaining as a single argument a log object that looks like this:
 
-* **customHeaders** (object) - this is to support custom headers passed down to the post request. for example { 'my-header': 'myHeaderValue'}
 ```javascript
 const log = {
   message: 'Text',
