@@ -200,6 +200,17 @@ describe('Requests', () => {
     expect(expected).to.eql(receivedJSON());
   });
 
+  it('Custom header must be received', () => {
+    plugin.apply(loglevel, { format: simple, headers: { 'my-header': 'my-header-value' } });
+
+    loglevel.info('header test');
+
+    server.respondWith(successful);
+    server.respond();
+
+    expect(server.requests[0].requestHeaders['my-header']).to.eql('my-header-value');
+  });
+
   it('The log from child logger must be received', () => {
     plugin.apply(loglevel, {
       format: plugin.json,

@@ -99,13 +99,15 @@ function interpolate(array) {
   return result;
 }
 
+const hasOwnProperty = Object.prototype.hasOwnProperty;
+
 // Light deep Object.assign({}, ...sources)
 function assign() {
   const target = {};
   for (let s = 0; s < arguments.length; s += 1) {
     const source = Object(arguments[s]);
     for (const key in source) {
-      if (Object.prototype.hasOwnProperty.call(source, key)) {
+      if (hasOwnProperty.call(source, key)) {
         target[key] = typeof source[key] === 'object' && !Array.isArray(source[key])
           ? assign(target[key], source[key])
           : source[key];
@@ -186,6 +188,7 @@ const save = win.remote;
 const defaultCapacity = 500;
 const defaults = {
   url: '/logger',
+  headers: {},
   token: '',
   onUnauthorized: () => {},
   timeout: 0,
@@ -207,7 +210,6 @@ const defaults = {
   },
   timestamp: () => new Date().toISOString(),
   format: plain,
-  customHeaders: {},
 };
 
 const remote = {
@@ -271,14 +273,14 @@ const remote = {
         xhr.setRequestHeader('Authorization', `Bearer ${config.token}`);
       }
 
-      if (Object.keys(config.customHeaders).length > 0) {
-        const headerKeys = Object.keys(config.customHeaders);
-        headerKeys.forEach((header) => {
-          const headerValue = config.customHeaders[header];
-          if (headerValue) {
-            xhr.setRequestHeader(header, headerValue);
+      const headers = config.headers;
+      for (const header in headers) {
+        if (hasOwnProperty.call(headers, header)) {
+          const value = headers[header];
+          if (value) {
+            xhr.setRequestHeader(header, value);
           }
-        });
+        }
       }
 
       function suspend(successful) {

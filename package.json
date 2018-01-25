@@ -5,12 +5,8 @@
     "name": "kutuluk"
   },
   "keywords": [
-    "log",
-    "logger",
-    "logging",
-    "browser",
     "loglevel",
-    "loglevel-plugin"
+    "plugin"
   ],
   "homepage": "https://github.com/kutuluk/loglevel-plugin-remote",
   "bugs": {
@@ -21,7 +17,7 @@
     "url": "git@github.com:kutuluk/loglevel-plugin-remote.git"
   },
   "license": "MIT",
-  "version": "0.6.2",
+  "version": "0.6.3",
   "main": "./lib/loglevel-plugin-remote",
   "babel": {
     "presets": [
@@ -46,8 +42,8 @@
     "test": "mocha",
     "babel": "babel ./src/remote.js --out-file ./lib/loglevel-plugin-remote.js",
     "uglifyjs": "uglifyjs ./lib/loglevel-plugin-remote.js -o ./dist/loglevel-plugin-remote.min.js -c -m reserved=[remote]",
-    "build": "npm run babel && npm run uglifyjs",
-    "publish-to-npm": "npm install && npm run build && npm publish"
+    "build": "npm run eslint && npm run babel && npm run uglifyjs",
+    "publish-to-npm": "npm install && npm run build && npm test && npm publish"
   },
   "devDependencies": {
     "babel-cli": "^6.26.0",
