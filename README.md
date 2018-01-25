@@ -55,6 +55,7 @@ const defaults = {
   },
   timestamp: () => new Date().toISOString(),
   format: remote.plain,
+  customHeaders: {},
 };
 ```
 
@@ -75,6 +76,7 @@ const defaults = {
 
 * **format** (function) - this option defines the logs format. This function will generate a log, obtaining as a single argument a log object that looks like this:
 
+* **customHeaders** (object) - this is to support custom headers passed down to the post request. for example { 'my-header': 'myHeaderValue'}
 ```javascript
 const log = {
   message: 'Text',
