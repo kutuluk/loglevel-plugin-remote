@@ -207,6 +207,7 @@ const defaults = {
   },
   timestamp: () => new Date().toISOString(),
   format: plain,
+  customHeaders: {},
 };
 
 const remote = {
@@ -268,6 +269,16 @@ const remote = {
       xhr.setRequestHeader('Content-Type', contentType);
       if (config.token) {
         xhr.setRequestHeader('Authorization', `Bearer ${config.token}`);
+      }
+
+      if (Object.keys(config.customHeaders).length > 0) {
+        const headerKeys = Object.keys(config.customHeaders);
+        headerKeys.forEach((header) => {
+          const headerValue = config.customHeaders[header];
+          if (headerValue) {
+            xhr.setRequestHeader(header, headerValue);
+          }
+        });
       }
 
       function suspend(successful) {
