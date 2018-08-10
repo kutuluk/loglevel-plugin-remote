@@ -1,5 +1,3 @@
-node_modules/
 .vscode/
-.idea/
-npm-update-all
-dist/
+node_modules/
+internal/
