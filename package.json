@@ -17,7 +17,7 @@
     "url": "git@github.com:kutuluk/loglevel-plugin-remote.git"
   },
   "license": "MIT",
-  "version": "0.6.5",
+  "version": "0.6.6",
   "main": "./lib/loglevel-plugin-remote",
   "babel": {
     "presets": [
@@ -40,8 +40,8 @@
   "scripts": {
     "eslint": "eslint src/remote.js",
     "test": "mocha",
-    "babel": "babel ./src/remote.js --out-file ./dist/loglevel-plugin-remote.js",
-    "uglifyjs": "uglifyjs ./dist/loglevel-plugin-remote.js -o ./dist/loglevel-plugin-remote.min.js -c -m reserved=[remote]",
+    "babel": "babel ./src/remote.js --out-file ./lib/loglevel-plugin-remote.js",
+    "uglifyjs": "uglifyjs ./lib/loglevel-plugin-remote.js -o ./dist/loglevel-plugin-remote.min.js -c -m reserved=[remote]",
     "build": "npm run eslint && npm run babel && npm run uglifyjs",
     "publish-to-npm": "npm install && npm run build && npm test && npm publish"
   },
