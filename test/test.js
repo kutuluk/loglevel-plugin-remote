@@ -1,4 +1,4 @@
-const expect = require('chai').expect;
+const { expect } = require('chai');
 const loglevel = require('loglevel');
 const sinon = require('sinon');
 
@@ -10,9 +10,8 @@ global.window = {
   clearTimeout() {}
 };
 
-const plugin = require('../lib/loglevel-plugin-remote');
 const other = require('loglevel-plugin-mock');
-const prefix = require('loglevel-plugin-prefix');
+const plugin = require('../lib/loglevel-plugin-remote');
 
 loglevel.setLevel('info');
 
@@ -33,12 +32,24 @@ describe('API', () => {
   });
 
   it('Methods', () => {
-    expect(plugin).to.have.property('apply').with.be.a('function');
-    expect(plugin).to.have.property('noConflict').with.be.a('function');
-    expect(plugin).to.have.property('plain').with.be.a('function');
-    expect(plugin).to.have.property('json').with.be.a('function');
-    expect(plugin).to.have.property('disable').with.be.a('function');
-    expect(plugin).to.have.property('setToken').with.be.a('function');
+    expect(plugin)
+      .to.have.property('apply')
+      .with.be.a('function');
+    expect(plugin)
+      .to.have.property('noConflict')
+      .with.be.a('function');
+    expect(plugin)
+      .to.have.property('plain')
+      .with.be.a('function');
+    expect(plugin)
+      .to.have.property('json')
+      .with.be.a('function');
+    expect(plugin)
+      .to.have.property('disable')
+      .with.be.a('function');
+    expect(plugin)
+      .to.have.property('setToken')
+      .with.be.a('function');
   });
 
   it('Empty arguments', () => {
@@ -104,7 +115,7 @@ describe('Common', () => {
 
     plugin.disable();
     other.disable();
-    spy.reset();
+    spy.resetHistory();
   });
 });
 
@@ -313,9 +324,9 @@ describe('Requests', () => {
   it('Stacktrace', () => {
     plugin.apply(loglevel, {
       format: simple,
-      stacktrace: { depth: 4, excess: 1 }
+      // stacktrace: { depth: 4, excess: 1 }
+      stacktrace: { depth: 4 }
     });
-    prefix.apply(loglevel);
 
     function fn3() {
       loglevel.trace('Stacktrace');
@@ -340,8 +351,6 @@ describe('Requests', () => {
     expect(receivedPlain()[3]).to.include('fn1');
     expect(receivedPlain()[4]).to.include('Context.it');
     expect(receivedPlain()[5]).to.include('more');
-
-    prefix.disable();
   });
 
   it('Undefined token', () => {
@@ -387,7 +396,7 @@ describe('Requests', () => {
 
     expect(spy.callCount).to.equal(1);
 
-    spy.reset();
+    spy.resetHistory();
   });
 
   it('Test down server', () => {

@@ -37,9 +37,9 @@ function getConstructorName(obj) {
   while (obj) {
     const descriptor = Object.getOwnPropertyDescriptor(obj, 'constructor');
     if (
-      descriptor !== undefined &&
-      typeof descriptor.value === 'function' &&
-      descriptor.value.name !== ''
+      descriptor !== undefined
+      && typeof descriptor.value === 'function'
+      && descriptor.value.name !== ''
     ) {
       return descriptor.value.name;
     }
@@ -99,7 +99,7 @@ function interpolate(array) {
   return result;
 }
 
-const hasOwnProperty = Object.prototype.hasOwnProperty;
+const { hasOwnProperty } = Object.prototype;
 
 // Light deep Object.assign({}, ...sources)
 function assign() {
@@ -171,7 +171,9 @@ let originalFactory;
 let pluginFactory;
 
 function plain(log) {
-  return `[${log.timestamp}] ${log.level.label.toUpperCase()}${log.logger ? ` (${log.logger})` : ''}: ${log.message}${log.stacktrace ? `\n${log.stacktrace}` : ''}`;
+  return `[${log.timestamp}] ${log.level.label.toUpperCase()}${
+    log.logger ? ` (${log.logger})` : ''
+  }: ${log.message}${log.stacktrace ? `\n${log.stacktrace}` : ''}`;
 }
 
 function json(log) {
@@ -246,7 +248,7 @@ const remote = {
     let isSending = false;
     let isSuspended = false;
 
-    let interval = config.interval;
+    let { interval } = config;
     const queue = new Queue(config.capacity);
 
     function send() {
@@ -273,7 +275,7 @@ const remote = {
         xhr.setRequestHeader('Authorization', `Bearer ${config.token}`);
       }
 
-      const headers = config.headers;
+      const { headers } = config;
       for (const header in headers) {
         if (hasOwnProperty.call(headers, header)) {
           const value = headers[header];
@@ -314,12 +316,13 @@ const remote = {
         win.clearTimeout(timeout);
 
         if (xhr.status === 200) {
+          // eslint-disable-next-line prefer-destructuring
           interval = config.interval;
           queue.confirm();
           suspend(true);
         } else {
           if (xhr.status === 401) {
-            const token = config.token;
+            const { token } = config;
             config.token = undefined;
             config.onUnauthorized(token);
           }
@@ -334,8 +337,9 @@ const remote = {
 
     pluginFactory = function remoteMethodFactory(methodName, logLevel, loggerName) {
       const rawMethod = originalFactory(methodName, logLevel, loggerName);
-      const needStack =
-        hasStacktraceSupport && config.stacktrace.levels.some(level => level === methodName);
+      const needStack = hasStacktraceSupport && config.stacktrace.levels.some(
+        level => level === methodName,
+      );
       const levelVal = loglevel.levels[methodName.toUpperCase()];
 
       return (...args) => {
@@ -345,7 +349,7 @@ const remote = {
         if (stacktrace) {
           const lines = stacktrace.split('\n');
           lines.splice(0, config.stacktrace.excess + 3);
-          const depth = config.stacktrace.depth;
+          const { depth } = config.stacktrace;
           if (depth && lines.length !== depth + 1) {
             const shrink = lines.splice(0, depth);
             stacktrace = shrink.join('\n');
