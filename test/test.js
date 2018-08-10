@@ -11,7 +11,7 @@ global.window = {
 };
 
 const other = require('loglevel-plugin-mock');
-const plugin = require('../lib/loglevel-plugin-remote');
+const plugin = require('../dist/loglevel-plugin-remote');
 
 loglevel.setLevel('info');
 

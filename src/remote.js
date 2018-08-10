@@ -190,6 +190,7 @@ const save = win.remote;
 const defaultCapacity = 500;
 const defaults = {
   url: '/logger',
+  method: 'POST',
   headers: {},
   token: '',
   onUnauthorized: () => {},
@@ -241,9 +242,7 @@ const remote = {
     let contentType;
     let isJSON;
 
-    if (!config.capacity) {
-      config.capacity = defaultCapacity;
-    }
+    config.capacity = config.capacity || defaultCapacity;
 
     let isSending = false;
     let isSuspended = false;
@@ -269,7 +268,7 @@ const remote = {
       isSending = true;
 
       const xhr = new win.XMLHttpRequest();
-      xhr.open('POST', config.url, true);
+      xhr.open(config.method, config.url, true);
       xhr.setRequestHeader('Content-Type', contentType);
       if (config.token) {
         xhr.setRequestHeader('Authorization', `Bearer ${config.token}`);
