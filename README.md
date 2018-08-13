@@ -42,14 +42,10 @@ const defaults = {
   onUnauthorized: failedToken => {},
   timeout: 0,
   interval: 1000,
-  backoff: interval => {
-    const multiplier = 2;
-    const jitter = 0.1;
-    const limit = 30000;
-    let next = interval * multiplier;
-    if (next > limit) next = limit;
-    next += next * jitter * Math.random();
-    return next;
+  backoff: {
+    multiplier: 2,
+    jitter: 0.1,
+    limit: 30000,
   },
   capacity: 500,
   stacktrace: {
@@ -76,7 +72,7 @@ const defaults = {
 
 - **interval** (number) - a time in milliseconds between sending messages. By default is 1000 (one second).
 
-- **backoff** (function) - a function used to increase the sending interval after each failed send. By default, it doubles the interval and adds 10% jitter. Having reached the value of 30 seconds, the interval increase stops. After successful sending, the interval will be reset to the initial value.
+- **backoff** (function|object) - a function used to increase the sending interval after each failed send. The function receives the duration of the previous suspend and returns the duration of the next suspend. Instead of the function backoff can be represented by an object with 3 properties: `multiplier`, `jitter` and `limit`. By default, it doubles the interval (multiplier=2) and adds 10% jitter (jitter=0.1). Having reached the value of 30 seconds (limit=30000), the interval increase stops. After successful sending, the interval will be reset to the initial value.
 
 - **capacity** (number) - the size of the queue in which messages are accumulated between sending. By default is 500. Overflow will delete the oldest messages. It is forbidden to set the value to 0 - in this case the default value will be used.
 

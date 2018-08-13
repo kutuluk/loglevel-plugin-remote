@@ -196,14 +196,10 @@ const defaults = {
   onUnauthorized: () => {},
   timeout: 0,
   interval: 1000,
-  backoff: (interval) => {
-    const multiplier = 2;
-    const jitter = 0.1;
-    const limit = 30000;
-    let next = interval * multiplier;
-    if (next > limit) next = limit;
-    next += next * jitter * Math.random();
-    return next;
+  backoff: {
+    multiplier: 2,
+    jitter: 0.1,
+    limit: 30000,
   },
   capacity: 0,
   stacktrace: {
@@ -239,15 +235,25 @@ const remote = {
 
     const config = assign(defaults, options);
 
-    let contentType;
-    let isJSON;
-
     config.capacity = config.capacity || defaultCapacity;
 
+    const { backoff } = config;
+
+    const backoffFunc = typeof backoff === 'object'
+      ? (duration) => {
+        let next = duration * backoff.multiplier;
+        if (next > backoff.limit) next = backoff.limit;
+        next += next * backoff.jitter * Math.random();
+        return next;
+      }
+      : backoff;
+
+    let { interval } = config;
+    let contentType;
+    let isJSON;
     let isSending = false;
     let isSuspended = false;
 
-    let { interval } = config;
     const queue = new Queue(config.capacity);
 
     function send() {
@@ -286,7 +292,8 @@ const remote = {
 
       function suspend(successful) {
         if (!successful) {
-          interval = config.backoff(interval || 1);
+          // interval = config.backoff(interval || 1);
+          interval = backoffFunc(interval || 1);
           queue.fail();
         }
 
@@ -336,9 +343,8 @@ const remote = {
 
     pluginFactory = function remoteMethodFactory(methodName, logLevel, loggerName) {
       const rawMethod = originalFactory(methodName, logLevel, loggerName);
-      const needStack = hasStacktraceSupport && config.stacktrace.levels.some(
-        level => level === methodName,
-      );
+      const needStack = hasStacktraceSupport
+        && config.stacktrace.levels.some(level => level === methodName);
       const levelVal = loglevel.levels[methodName.toUpperCase()];
 
       return (...args) => {
