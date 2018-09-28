@@ -187,6 +187,30 @@ describe('Requests', () => {
     expect(expected).to.eql(receivedPlain());
   });
 
+  it('The log must be received', () => {
+    plugin.apply(loglevel, { format: simple, level: 'info' });
+
+    loglevel.info(`plain-${escape}`);
+
+    server.respondWith(successful);
+    server.respond();
+
+    const expected = [`plain-${escape}`];
+
+    expect(expected).to.eql(receivedPlain());
+  });
+
+  it('The log should not be received', () => {
+    plugin.apply(loglevel, { format: simple, level: 'error' });
+
+    loglevel.info(`plain-${escape}`);
+
+    server.respondWith(successful);
+    server.respond();
+
+    expect(server.requests.length).to.eql(0);
+  });
+
   it('The json log must be received', () => {
     plugin.apply(loglevel, {
       format: plugin.json,

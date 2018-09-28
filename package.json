@@ -17,7 +17,7 @@
     "url": "git@github.com:kutuluk/loglevel-plugin-remote.git"
   },
   "license": "MIT",
-  "version": "0.6.7",
+  "version": "0.6.8",
   "main": "./lib/loglevel-plugin-remote",
   "babel": {
     "presets": [
@@ -43,23 +43,23 @@
     "babel": "babel ./src/remote.js --out-file ./lib/loglevel-plugin-remote.js",
     "uglifyjs": "uglifyjs ./lib/loglevel-plugin-remote.js -o ./dist/loglevel-plugin-remote.min.js -c -m reserved=[remote]",
     "build": "npm run eslint && npm run babel && npm run uglifyjs",
-    "publish-to-npm": "npm install && npm run build && npm test && npm publish"
+    "release": "npm install && npm run build && npm test && npm publish"
   },
   "devDependencies": {
     "babel-cli": "^6.26.0",
     "babel-plugin-add-module-exports": "^0.2.1",
     "babel-plugin-transform-es2015-modules-umd": "^6.24.1",
     "babel-preset-env": "^1.7.0",
-    "chai": "^4.1.2",
-    "eslint": "^5.3.0",
-    "eslint-config-airbnb-base": "^13.0.0",
+    "chai": "^4.2.0",
+    "eslint": "^5.6.0",
+    "eslint-config-airbnb-base": "^13.1.0",
     "eslint-plugin-chai-friendly": "^0.4.1",
-    "eslint-plugin-import": "^2.13.0",
+    "eslint-plugin-import": "^2.14.0",
     "loglevel": "^1.6.1",
     "loglevel-plugin-mock": "^0.1.0",
     "mocha": "^5.2.0",
-    "sinon": "^6.1.5",
-    "uglify-js": "^3.4.7"
+    "sinon": "^6.3.4",
+    "uglify-js": "^3.4.9"
   },
   "dependencies": {}
 }

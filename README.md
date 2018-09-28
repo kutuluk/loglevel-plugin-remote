@@ -42,6 +42,7 @@ const defaults = {
   onUnauthorized: failedToken => {},
   timeout: 0,
   interval: 1000,
+  level: 'trace',
   backoff: {
     multiplier: 2,
     jitter: 0.1,
@@ -71,6 +72,8 @@ const defaults = {
 - **timeout** (number) - a timeout in milliseconds (see [XMLHttpRequest.timeout](https://developer.mozilla.org/docs/Web/API/XMLHttpRequest/timeout))
 
 - **interval** (number) - a time in milliseconds between sending messages. By default is 1000 (one second).
+
+- **level** (string) - a plugin specific level. The plugin level does not cancel the level of the logger. The highest level will be used to send messages. If the level of the logger is `warn`, and the level of the plugin is `error`, only messages with the `error` level will be sent to the server. By default is `trace`.
 
 - **backoff** (function|object) - a function used to increase the sending interval after each failed send. The function receives the duration of the previous suspend and returns the duration of the next suspend. Instead of the function backoff can be represented by an object with 3 properties: `multiplier`, `jitter` and `limit`. By default, it doubles the interval (multiplier=2) and adds 10% jitter (jitter=0.1). Having reached the value of 30 seconds (limit=30000), the interval increase stops. After successful sending, the interval will be reset to the initial value.
 
