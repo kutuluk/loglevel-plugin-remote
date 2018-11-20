@@ -349,56 +349,59 @@ const remote = {
       const levelVal = loglevel.levels[methodName.toUpperCase()];
       const needLog = levelVal >= loglevel.levels[config.level.toUpperCase()];
 
+      if (!needLog) {
+        // don't wrap raw method to preserve stack traces
+        return rawMethod;
+      }
+
       return (...args) => {
-        if (needLog) {
-          const timestamp = config.timestamp();
+        const timestamp = config.timestamp();
 
-          let stacktrace = needStack ? getStacktrace() : '';
-          if (stacktrace) {
-            const lines = stacktrace.split('\n');
-            lines.splice(0, config.stacktrace.excess + 3);
-            const { depth } = config.stacktrace;
-            if (depth && lines.length !== depth + 1) {
-              const shrink = lines.splice(0, depth);
-              stacktrace = shrink.join('\n');
-              if (lines.length) stacktrace += `\n    and ${lines.length} more`;
-            } else {
-              stacktrace = lines.join('\n');
-            }
-          }
-
-          const log = config.format({
-            message: interpolate(args),
-            level: {
-              label: methodName,
-              value: levelVal,
-            },
-            logger: loggerName || '',
-            timestamp,
-            stacktrace,
-          });
-
-          if (isJSON === undefined) {
-            isJSON = typeof log !== 'string';
-            contentType = isJSON ? 'application/json' : 'text/plain';
-          }
-
-          let content = '';
-          if (isJSON) {
-            try {
-              content += JSON.stringify(log);
-            } catch (error) {
-              rawMethod(...args);
-              loglevel.getLogger('logger').error(error);
-              return;
-            }
+        let stacktrace = needStack ? getStacktrace() : '';
+        if (stacktrace) {
+          const lines = stacktrace.split('\n');
+          lines.splice(0, config.stacktrace.excess + 3);
+          const { depth } = config.stacktrace;
+          if (depth && lines.length !== depth + 1) {
+            const shrink = lines.splice(0, depth);
+            stacktrace = shrink.join('\n');
+            if (lines.length) stacktrace += `\n    and ${lines.length} more`;
           } else {
-            content += log;
+            stacktrace = lines.join('\n');
           }
-
-          queue.push(content);
-          send();
         }
+
+        const log = config.format({
+          message: interpolate(args),
+          level: {
+            label: methodName,
+            value: levelVal,
+          },
+          logger: loggerName || '',
+          timestamp,
+          stacktrace,
+        });
+
+        if (isJSON === undefined) {
+          isJSON = typeof log !== 'string';
+          contentType = isJSON ? 'application/json' : 'text/plain';
+        }
+
+        let content = '';
+        if (isJSON) {
+          try {
+            content += JSON.stringify(log);
+          } catch (error) {
+            rawMethod(...args);
+            loglevel.getLogger('logger').error(error);
+            return;
+          }
+        } else {
+          content += log;
+        }
+
+        queue.push(content);
+        send();
 
         rawMethod(...args);
       };
