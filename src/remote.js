@@ -1,7 +1,8 @@
-const win = window;
+const win = typeof window !== 'undefined' ? window : {};
 
-if (!win) {
-  throw new Error('Plugin for browser usage only');
+if (typeof window === 'undefined') {
+  // eslint-disable-next-line no-console
+  console.warn('Plugin for browser usage only');
 }
 
 let CIRCULAR_ERROR_MESSAGE;
