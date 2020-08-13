@@ -194,6 +194,7 @@ const defaults = {
   headers: {},
   token: '',
   onUnauthorized: () => {},
+  onCallback: () => {},
   timeout: 0,
   interval: 1000,
   level: 'trace',
@@ -327,6 +328,7 @@ const remote = {
           interval = config.interval;
           queue.confirm();
           suspend(true);
+          config.onCallback();
         } else {
           if (xhr.status === 401) {
             const { token } = config;
