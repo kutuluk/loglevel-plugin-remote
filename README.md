@@ -38,6 +38,7 @@ const defaults = {
   url: '/logger',
   method: 'POST',
   headers: {},
+  withCredentials: false,
   token: '',
   onUnauthorized: failedToken => {},
   timeout: 0,
@@ -64,6 +65,8 @@ const defaults = {
 - **method** (string) - a HTTP method of the server logging API
 
 - **headers** (object) - this is to support custom headers passed down to the post request. For example { 'my-header': 'myHeaderValue' }
+
+- **withCredentials** (boolean) - enable cross-site Access-Control requests to use credentials such as cookies, authorization headers or TLS client certificates.
 
 - **token** (string) - a token for Bearer authentication scheme (see [RFC 6750](https://tools.ietf.org/html/rfc6750)), e.g. [UUID](https://en.wikipedia.org/wiki/Universally_unique_identifier) or [JWT](https://jwt.io/). By default is `''`. If you set the value to `undefined`, the sending of logs will be suspended until the `setToken` method is called, but the logs will still accumulate in the queue.
 
