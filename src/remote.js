@@ -192,8 +192,9 @@ const defaults = {
   url: '/logger',
   method: 'POST',
   headers: {},
+  withCredentials: false,
   token: '',
-  onUnauthorized: () => {},
+  onUnauthorized: () => { },
   timeout: 0,
   interval: 1000,
   level: 'trace',
@@ -279,6 +280,10 @@ const remote = {
       xhr.setRequestHeader('Content-Type', contentType);
       if (config.token) {
         xhr.setRequestHeader('Authorization', `Bearer ${config.token}`);
+      }
+
+      if (config.withCredentials) {
+        xhr.withCredentials = true;
       }
 
       const { headers } = config;
