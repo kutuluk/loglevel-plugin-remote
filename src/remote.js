@@ -210,6 +210,7 @@ const defaults = {
   },
   timestamp: () => new Date().toISOString(),
   format: plain,
+  formatRequest: (logs) => `{"logs":[${logs.join(',')}]}`
 };
 
 const remote = {
@@ -269,7 +270,7 @@ const remote = {
 
         const logs = queue.send();
 
-        queue.content = isJSON ? `{"logs":[${logs.join(',')}]}` : logs.join('\n');
+        queue.content = isJSON ? formatRequest(logs)  : logs.join('\n');
       }
 
       isSending = true;
