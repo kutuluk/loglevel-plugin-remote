@@ -270,7 +270,7 @@ const remote = {
 
         const logs = queue.send();
 
-        queue.content = isJSON ? formatRequest(logs)  : logs.join('\n');
+        queue.content = isJSON ? formatRequest(logs) : logs.join('\n');
       }
 
       isSending = true;
