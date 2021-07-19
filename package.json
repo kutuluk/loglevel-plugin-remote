@@ -60,6 +60,5 @@
     "mocha": "^5.2.0",
     "sinon": "^6.3.4",
     "uglify-js": "^3.4.9"
-  },
-  "dependencies": {}
+  }
 }
