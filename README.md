@@ -159,6 +159,16 @@ then the logs will look like this:
 }
 ```
 
+- **formatRequest** (function) - this option defines format of logs which you send to server. Obtains single argument - logs queue consisting of objects formatted by function above. It allows you to customize payload in JSON format.
+By default returns object containing logs in array:
+
+```
+{
+  "logs": [logObj1, logObj2]
+}
+```
+
+
 You can include any values ​​in the log. For example:
 
 ```javascript
