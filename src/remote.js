@@ -412,6 +412,11 @@ const remote = {
       send();
     };
 
+     remote.setHeaders = (headers)=>{
+     config.headers = headers;
+      send();
+    }
+
     return logger;
   },
   disable() {
